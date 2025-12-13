@@ -1,0 +1,44 @@
+# **- [Symby AI](https://symbyai.com/)**
+
+## ***Challenge from: [Symby](http://symbyai.com/)***
+
+### **Prizes**:
+
+- $1,000 to winner
+- $500 to runner-up
+
+### Dataset
+
+[aitx_data - Google Drive](https://drive.google.com/drive/folders/1Tu8nPAK00PVsFHcDk1moqh_rPIyeOnYn)
+
+### **TL;DR**
+
+Machine learning is transforming science, but **how much, where, and with what consequences?**
+
+Some claim AI is revolutionizing drug discovery and materials science. Others worry it's creating unreplicable results and citation bubbles. The truth is: **we don't actually know the quantitative impact.**
+
+### Your challenge:
+
+Build systems that measure ML's real influence on scientific progress across disciplines.
+
+### **Dataset**
+
+**81,000 scientific papers (2016-2024) and their metadata,** spanning computer science and domain sciences:
+
+- 1,000+ ML/AI methodology papers (deep learning, transformers, GANs, RL techniques)
+- 80,000 domain science papers across drug discovery, materials science, climate science, physics, neuroscience, and social sciences
+- Rich metadata including citation networks, ML adoption markers (frameworks, compute resources, datasets referenced), reproducibility indicators (code/data availability, replication attempts), research outcomes (retractions, corrections, clinical trial progressions, patents), and impact metrics (citations, media coverage, policy influence)
+- Temporal data tracking adoption curves and pre/post major ML breakthroughs (AlexNet, AlphaFold, GPT models)
+
+### **Insight Goal**
+
+Quantify machine learning's real impact on scientific progress across disciplines. Measure discovery acceleration, adoption patterns, reproducibility effects, and discipline-specific outcomes. Distinguish transformational ML applications from hype. Identify which fields benefit most, which ML techniques have staying power, and whether AI-enabled research is more or less reproducible than traditional methods.
+
+### **Build Objective**
+
+Create an interactive research intelligence platform that:
+
+- **Quantifies ML impact** with attribution scoring (what % of breakthrough comes from ML vs. domain insight), acceleration metrics (did ML speed discovery by months/years), and efficiency measures (cost per discovery)
+- **Visualizes adoption dynamics** across disciplines with interactive dashboards showing S-curves, citation flows from ML methods to domain papers, and animated temporal evolution (2016-2024)
+- **Analyzes quality trade-offs** by cross-referencing ML adoption with reproducibility rates, retraction patterns/signals
+- **Traces discovery impact** for high-profile cases (AlphaFold, COVID drug discovery) from ML method → domain application

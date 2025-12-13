@@ -1,0 +1,79 @@
+AI Research Impact Observatory
+Sponsorship: $1,000 to winner | $500 to runner-up
+TL;DR
+Machine learning is transforming science, but how much, where, and with what consequences?
+Some claim AI is revolutionizing drug discovery and materials science. Others worry it's creating unreplicable results and citation bubbles. The truth is: we don't actually know the quantitative impact.
+Your challenge: Build systems that measure ML's real influence on scientific progress across disciplines.
+
+The Dataset
+Two-Tier Data Infrastructure
+Validation Dataset (81K papers)
+Test your metrics against expected results with 81,000 scientific papers (2016-2024) spanning computer science and domain sciences.
+Production Dataset (20M+ papers)
+Build and scale your actual metrics with our comprehensive 20M+ paper dataset.
+What's Included
+1,000+ ML/AI methodology papers: Deep learning, transformers, GANs, RL techniques
+Domain science papers across:
+Drug discovery
+Materials science
+Climate science
+Physics
+Neuroscience
+More!
+Rich Metadata
+Citation networks
+ML adoption markers (frameworks, compute resources, datasets referenced)
+Reproducibility indicators (code/data availability, replication attempts)
+Research outcomes (retractions, corrections, clinical trial progressions, patents)
+Impact metrics (citations, media coverage, policy influence)
+Dataset Access
+Please check the directory for the “modded_s2orc_data.zip” file for access to the complete dataset (when upload is complete, data may still be in the middle of uploading!). Full 20M+ publication dataset can be found at this huggingface link: https://huggingface.co/datasets/claran/modular-s2orc/tree/main
+
+
+Insight Goal
+Quantify machine learning's real impact on scientific progress across disciplines. Measure discovery acceleration, adoption patterns, reproducibility effects, and discipline-specific outcomes.
+Key objectives:
+Distinguish transformational ML applications from hype
+Identify which fields benefit most
+Determine which ML techniques have staying power
+Assess whether AI-enabled research is more or less reproducible than traditional methods
+
+Build Objective
+Create an interactive research intelligence platform that includes one or more of these capabilities:
+1. Quantify ML Impact
+Measure how much ML actually contributes to scientific breakthroughs and discovery efficiency.
+Attribution scoring: What % of breakthrough comes from ML vs. domain insight?
+Acceleration metrics: Did ML speed discovery by months/years?
+Efficiency measures: Cost per discovery
+2. Visualize Adoption Dynamics
+Show how ML techniques spread across scientific disciplines over time.
+Interactive dashboards showing S-curves and citation flows from ML methods to domain papers
+Animated temporal evolution (2016-2024)
+Cross-discipline comparison views
+3. Analyze Quality Trade-offs
+Investigate whether ML adoption correlates with better or worse research reproducibility.
+Cross-reference ML adoption with reproducibility rates
+Retraction pattern detection and signals
+Code/data availability correlations
+4. Trace Discovery Impact
+Follow the path from ML method development to real-world scientific impact.
+High-profile case studies (AlphaFold, COVID drug discovery)
+Journey tracking: ML method → domain application → real-world impact
+
+Evaluation Criteria
+Submissions will be evaluated on:
+Impact measurement accuracy: How well do your metrics align with expected results in the validation dataset?
+Insight depth: Does your analysis reveal novel, actionable insights about ML's impact on science?
+Visualization quality: Are adoption dynamics and patterns clearly communicated?
+Technical rigor: Is your methodology sound and reproducible?
+Scalability: Can your approach handle the full 20M+ paper dataset?
+
+Getting Started
+Explore the validation dataset (81K papers) to understand the data structure
+Develop and test your metrics on the validation set
+Scale your solution to the production dataset (20M+ papers)
+Build your interactive platform
+
+Good luck! 🚀
+
+
