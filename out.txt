@@ -1,0 +1,487 @@
+[Dec 13 05:28]  .
+├── [Dec 13 05:23]  CLAUDE.md
+├── [Dec 13 05:15]  DOCUMENTATION.md
+├── [Dec 13 05:26]  app.py
+├── [Dec 13 04:43]  config
+├── [Dec 13 04:33]  dataset.txt
+├── [Dec 13 04:32]  instructions.txt
+├── [Dec 13 04:43]  notebooks
+├── [Dec 13 05:42]  out.txt
+├── [Dec 13 04:31]  prompt.md
+├── [Dec 13 04:43]  requirements.txt
+├── [Dec 13 05:30]  s2orc_data
+│   ├── [Dec 13 04:33]  AgriculturalAndFoodSciences,2016-2018
+│   │   ├── [Dec 13 05:37]  test
+│   │   │   ├── [Dec 12 17:23]  Agricultural And Food Sciences-2016.jsonl
+│   │   │   ├── [Dec 12 17:23]  Agricultural And Food Sciences-2017.jsonl
+│   │   │   └── [Dec 12 17:23]  Agricultural And Food Sciences-2018.jsonl
+│   │   ├── [Dec 13 05:37]  train
+│   │   │   ├── [Dec 12 17:23]  Agricultural And Food Sciences-2016.gz-0000.json
+│   │   │   ├── [Dec 12 17:23]  Agricultural And Food Sciences-2017.gz-0000.json
+│   │   │   └── [Dec 12 17:23]  Agricultural And Food Sciences-2018.gz-0000.json
+│   │   └── [Dec 13 05:37]  val
+│   │       ├── [Dec 12 17:23]  Agricultural And Food Sciences-2016.jsonl
+│   │       ├── [Dec 12 17:23]  Agricultural And Food Sciences-2017.jsonl
+│   │       └── [Dec 12 17:23]  Agricultural And Food Sciences-2018.jsonl
+│   ├── [Dec 13 04:30]  AgriculturalAndFoodSciences,2021-2021
+│   │   ├── [Dec 13 05:36]  test
+│   │   │   └── [Dec 12 17:23]  Agricultural And Food Sciences-2021.jsonl
+│   │   ├── [Dec 13 05:36]  train
+│   │   │   └── [Dec 12 17:24]  Agricultural And Food Sciences-2021.gz-0000.json
+│   │   └── [Dec 13 05:36]  val
+│   │       └── [Dec 12 17:23]  Agricultural And Food Sciences-2021.jsonl
+│   ├── [Dec 13 04:39]  AgriculturalAndFoodSciences,2022-2022
+│   │   ├── [Dec 13 05:33]  test
+│   │   │   └── [Dec 12 17:23]  Agricultural And Food Sciences-2022.jsonl
+│   │   ├── [Dec 13 05:33]  train
+│   │   │   └── [Dec 12 17:23]  Agricultural And Food Sciences-2022.gz-0000.json
+│   │   └── [Dec 13 05:33]  val
+│   │       └── [Dec 12 17:23]  Agricultural And Food Sciences-2022.jsonl
+│   ├── [Dec 13 04:42]  Biology,2017-2017
+│   │   ├── [Dec 13 05:40]  test
+│   │   │   └── [Dec 12 17:24]  Biology-2017.jsonl
+│   │   ├── [Dec 13 05:41]  train
+│   │   │   └── [Dec 12 17:25]  Biology-2017.gz-0000.json
+│   │   └── [Dec 13 05:41]  val
+│   │       └── [Dec 12 17:24]  Biology-2017.jsonl
+│   ├── [Dec 13 04:38]  Biology,2018-2018
+│   │   ├── [Dec 13 05:35]  test
+│   │   │   └── [Dec 12 17:24]  Biology-2018.jsonl
+│   │   ├── [Dec 13 05:35]  train
+│   │   │   └── [Dec 12 17:25]  Biology-2018.gz-0000.json
+│   │   └── [Dec 13 05:35]  val
+│   │       └── [Dec 12 17:24]  Biology-2018.jsonl
+│   ├── [Dec 13 04:35]  Biology,2019-2019
+│   │   ├── [Dec 13 05:35]  test
+│   │   │   └── [Dec 12 17:24]  Biology-2019.jsonl
+│   │   ├── [Dec 13 05:36]  train
+│   │   │   └── [Dec 12 17:25]  Biology-2019.gz-0000.json
+│   │   └── [Dec 13 05:36]  val
+│   │       └── [Dec 12 17:24]  Biology-2019.jsonl
+│   ├── [Dec 13 04:41]  Biology,2021-2021
+│   │   ├── [Dec 13 05:38]  test
+│   │   │   └── [Dec 12 17:24]  Biology-2021.jsonl
+│   │   ├── [Dec 13 05:38]  train
+│   │   │   └── [Dec 12 17:25]  Biology-2021.gz-0000.json
+│   │   └── [Dec 13 05:38]  val
+│   │       └── [Dec 12 17:24]  Biology-2021.jsonl
+│   ├── [Dec 13 04:34]  Chemistry,2019-2020
+│   │   ├── [Dec 13 05:34]  test
+│   │   │   ├── [Dec 12 17:25]  Chemistry-2019.jsonl
+│   │   │   └── [Dec 12 17:25]  Chemistry-2020.jsonl
+│   │   ├── [Dec 13 05:34]  train
+│   │   │   ├── [Dec 12 17:25]  Chemistry-2019.gz-0000.json
+│   │   │   └── [Dec 12 17:26]  Chemistry-2020.gz-0000.json
+│   │   └── [Dec 13 05:34]  val
+│   │       ├── [Dec 12 17:25]  Chemistry-2019.jsonl
+│   │       └── [Dec 12 17:25]  Chemistry-2020.jsonl
+│   ├── [Dec 13 04:38]  Chemistry,2021-2022
+│   │   ├── [Dec 13 05:37]  test
+│   │   │   ├── [Dec 12 17:25]  Chemistry-2021.jsonl
+│   │   │   └── [Dec 12 17:25]  Chemistry-2022.jsonl
+│   │   ├── [Dec 13 05:38]  train
+│   │   │   ├── [Dec 12 17:26]  Chemistry-2021.gz-0000.json
+│   │   │   └── [Dec 12 17:26]  Chemistry-2022.gz-0000.json
+│   │   └── [Dec 13 05:38]  val
+│   │       ├── [Dec 12 17:25]  Chemistry-2021.jsonl
+│   │       └── [Dec 12 17:25]  Chemistry-2022.jsonl
+│   ├── [Dec 13 04:31]  ComputerScience,2009-2011
+│   │   ├── [Dec 13 05:33]  test
+│   │   │   ├── [Dec 12 17:25]  Computer Science-2009.jsonl
+│   │   │   ├── [Dec 12 17:25]  Computer Science-2010.jsonl
+│   │   │   └── [Dec 12 17:25]  Computer Science-2011.jsonl
+│   │   ├── [Dec 13 05:34]  train
+│   │   │   ├── [Dec 12 17:26]  Computer Science-2009.gz-0000.json
+│   │   │   ├── [Dec 12 17:26]  Computer Science-2010.gz-0000.json
+│   │   │   └── [Dec 12 17:26]  Computer Science-2011.gz-0000.json
+│   │   └── [Dec 13 05:34]  val
+│   │       ├── [Dec 12 17:25]  Computer Science-2009.jsonl
+│   │       ├── [Dec 12 17:26]  Computer Science-2010.jsonl
+│   │       └── [Dec 12 17:26]  Computer Science-2011.jsonl
+│   ├── [Dec 13 04:41]  ComputerScience,2017-2017
+│   │   ├── [Dec 13 05:30]  test
+│   │   │   └── [Dec 12 17:26]  Computer Science-2017.jsonl
+│   │   ├── [Dec 13 05:31]  train
+│   │   │   └── [Dec 12 17:26]  Computer Science-2017.gz-0000.json
+│   │   └── [Dec 13 05:31]  val
+│   │       └── [Dec 12 17:26]  Computer Science-2017.jsonl
+│   ├── [Dec 13 04:40]  ComputerScience,2018-2018
+│   │   ├── [Dec 13 05:33]  test
+│   │   │   └── [Dec 12 17:26]  Computer Science-2018.jsonl
+│   │   ├── [Dec 13 05:33]  train
+│   │   │   └── [Dec 12 17:27]  Computer Science-2018.gz-0000.json
+│   │   └── [Dec 13 05:33]  val
+│   │       └── [Dec 12 17:26]  Computer Science-2018.jsonl
+│   ├── [Dec 13 04:36]  ComputerScience,2019-2019
+│   │   ├── [Dec 13 05:33]  test
+│   │   │   └── [Dec 12 17:26]  Computer Science-2019.jsonl
+│   │   ├── [Dec 13 05:33]  train
+│   │   │   └── [Dec 12 17:27]  Computer Science-2019.gz-0000.json
+│   │   └── [Dec 13 05:33]  val
+│   │       └── [Dec 12 17:26]  Computer Science-2019.jsonl
+│   ├── [Dec 13 04:43]  ComputerScience,2021-2021
+│   │   ├── [Dec 13 05:39]  test
+│   │   │   └── [Dec 12 17:26]  Computer Science-2021.jsonl
+│   │   ├── [Dec 13 05:40]  train
+│   │   │   └── [Dec 12 17:29]  Computer Science-2021.gz-0000.json
+│   │   └── [Dec 13 05:40]  val
+│   │       └── [Dec 12 17:26]  Computer Science-2021.jsonl
+│   ├── [Dec 13 04:34]  Economics,2017-2019
+│   │   ├── [Dec 13 05:34]  test
+│   │   │   ├── [Dec 12 17:26]  Economics-2017.jsonl
+│   │   │   ├── [Dec 12 17:26]  Economics-2018.jsonl
+│   │   │   └── [Dec 12 17:26]  Economics-2019.jsonl
+│   │   ├── [Dec 13 05:34]  train
+│   │   │   ├── [Dec 12 17:26]  Economics-2017.gz-0000.json
+│   │   │   ├── [Dec 12 17:27]  Economics-2018.gz-0000.json
+│   │   │   └── [Dec 12 17:27]  Economics-2019.gz-0000.json
+│   │   └── [Dec 13 05:34]  val
+│   │       ├── [Dec 12 17:27]  Economics-2017.jsonl
+│   │       ├── [Dec 12 17:27]  Economics-2018.jsonl
+│   │       └── [Dec 12 17:27]  Economics-2019.jsonl
+│   ├── [Dec 13 04:31]  Economics,2020-2020
+│   │   ├── [Dec 13 05:41]  test
+│   │   │   └── [Dec 12 17:27]  Economics-2020.jsonl
+│   │   ├── [Dec 13 05:41]  train
+│   │   │   └── [Dec 12 17:27]  Economics-2020.gz-0000.json
+│   │   └── [Dec 13 05:41]  val
+│   │       └── [Dec 12 17:27]  Economics-2020.jsonl
+│   ├── [Dec 13 04:36]  Engineering,2017-2019
+│   │   ├── [Dec 13 05:37]  test
+│   │   │   ├── [Dec 12 17:27]  Engineering-2017.jsonl
+│   │   │   ├── [Dec 12 17:27]  Engineering-2018.jsonl
+│   │   │   └── [Dec 12 17:27]  Engineering-2019.jsonl
+│   │   ├── [Dec 13 05:37]  train
+│   │   │   ├── [Dec 12 17:28]  Engineering-2017.gz-0000.json
+│   │   │   ├── [Dec 12 17:28]  Engineering-2018.gz-0000.json
+│   │   │   └── [Dec 12 17:28]  Engineering-2019.gz-0000.json
+│   │   └── [Dec 13 05:37]  val
+│   │       ├── [Dec 12 17:28]  Engineering-2017.jsonl
+│   │       ├── [Dec 12 17:28]  Engineering-2018.jsonl
+│   │       └── [Dec 12 17:28]  Engineering-2019.jsonl
+│   ├── [Dec 13 04:37]  Engineering,2020-2020
+│   │   ├── [Dec 13 05:34]  test
+│   │   │   └── [Dec 12 17:28]  Engineering-2020.jsonl
+│   │   ├── [Dec 13 05:34]  train
+│   │   │   └── [Dec 12 17:28]  Engineering-2020.gz-0000.json
+│   │   └── [Dec 13 05:34]  val
+│   │       └── [Dec 12 17:28]  Engineering-2020.jsonl
+│   ├── [Dec 13 04:35]  Engineering,2021-2021
+│   │   ├── [Dec 13 05:30]  test
+│   │   │   └── [Dec 12 17:28]  Engineering-2021.jsonl
+│   │   ├── [Dec 13 05:30]  train
+│   │   │   └── [Dec 12 17:28]  Engineering-2021.gz-0000.json
+│   │   └── [Dec 13 05:30]  val
+│   │       └── [Dec 12 17:28]  Engineering-2021.jsonl
+│   ├── [Dec 13 04:33]  Engineering,2022-2022
+│   │   ├── [Dec 13 05:32]  test
+│   │   │   └── [Dec 12 17:28]  Engineering-2022.jsonl
+│   │   ├── [Dec 13 05:32]  train
+│   │   │   └── [Dec 12 17:29]  Engineering-2022.gz-0000.json
+│   │   └── [Dec 13 05:32]  val
+│   │       └── [Dec 12 17:28]  Engineering-2022.jsonl
+│   ├── [Dec 13 04:32]  EnvironmentalScience,2017-2018
+│   │   ├── [Dec 13 05:31]  test
+│   │   │   ├── [Dec 12 17:28]  Environmental Science-2017.jsonl
+│   │   │   ├── [Dec 12 17:28]  Environmental Science-2018.jsonl
+│   │   │   ├── [Dec 12 17:28]  Geography-2017.jsonl
+│   │   │   └── [Dec 12 17:28]  Geography-2018.jsonl
+│   │   ├── [Dec 13 05:31]  train
+│   │   │   ├── [Dec 12 17:29]  Environmental Science-2017.gz-0000.json
+│   │   │   ├── [Dec 12 17:29]  Environmental Science-2018.gz-0000.json
+│   │   │   ├── [Dec 12 17:28]  Geography-2017.gz-0000.json
+│   │   │   └── [Dec 12 17:28]  Geography-2018.gz-0000.json
+│   │   └── [Dec 13 05:31]  val
+│   │       ├── [Dec 12 17:28]  Environmental Science-2017.jsonl
+│   │       ├── [Dec 12 17:28]  Environmental Science-2018.jsonl
+│   │       ├── [Dec 12 17:28]  Geography-2017.jsonl
+│   │       └── [Dec 12 17:28]  Geography-2018.jsonl
+│   ├── [Dec 13 04:31]  EnvironmentalScience,2020-2020
+│   │   ├── [Dec 13 05:34]  test
+│   │   │   ├── [Dec 12 17:28]  Environmental Science-2020.jsonl
+│   │   │   └── [Dec 12 17:28]  Geography-2020.jsonl
+│   │   ├── [Dec 13 05:34]  train
+│   │   │   ├── [Dec 12 17:29]  Environmental Science-2020.gz-0000.json
+│   │   │   └── [Dec 12 17:28]  Geography-2020.gz-0000.json
+│   │   └── [Dec 13 05:34]  val
+│   │       ├── [Dec 12 17:28]  Environmental Science-2020.jsonl
+│   │       └── [Dec 12 17:28]  Geography-2020.jsonl
+│   ├── [Dec 13 04:32]  EnvironmentalScience,2021-2021
+│   │   ├── [Dec 13 05:33]  test
+│   │   │   ├── [Dec 12 17:28]  Environmental Science-2021.jsonl
+│   │   │   └── [Dec 12 17:28]  Geography-2021.jsonl
+│   │   ├── [Dec 13 05:33]  train
+│   │   │   ├── [Dec 12 17:29]  Environmental Science-2021.gz-0000.json
+│   │   │   └── [Dec 12 17:29]  Geography-2021.gz-0000.json
+│   │   └── [Dec 13 05:33]  val
+│   │       ├── [Dec 12 17:29]  Environmental Science-2021.jsonl
+│   │       └── [Dec 12 17:29]  Geography-2021.jsonl
+│   ├── [Dec 13 04:37]  EnvironmentalScience,2022-2022
+│   │   ├── [Dec 13 05:37]  test
+│   │   │   ├── [Dec 12 17:29]  Environmental Science-2022.jsonl
+│   │   │   └── [Dec 12 17:29]  Geography-2022.jsonl
+│   │   ├── [Dec 13 05:37]  train
+│   │   │   ├── [Dec 12 17:29]  Environmental Science-2022.gz-0000.json
+│   │   │   └── [Dec 12 17:29]  Geography-2022.gz-0000.json
+│   │   └── [Dec 13 05:37]  val
+│   │       ├── [Dec 12 17:29]  Environmental Science-2022.jsonl
+│   │       └── [Dec 12 17:29]  Geography-2022.jsonl
+│   ├── [Dec 13 04:45]  MaterialsScience,2016-2018
+│   │   ├── [Dec 13 05:31]  test
+│   │   │   ├── [Dec 12 17:29]  Materials Science-2016.jsonl
+│   │   │   ├── [Dec 12 17:29]  Materials Science-2017.jsonl
+│   │   │   └── [Dec 12 17:29]  Materials Science-2018.jsonl
+│   │   ├── [Dec 13 05:31]  train
+│   │   │   ├── [Dec 12 17:29]  Materials Science-2016.gz-0000.json
+│   │   │   ├── [Dec 12 17:29]  Materials Science-2017.gz-0000.json
+│   │   │   └── [Dec 12 17:29]  Materials Science-2018.gz-0000.json
+│   │   └── [Dec 13 05:31]  val
+│   │       ├── [Dec 12 17:29]  Materials Science-2016.jsonl
+│   │       ├── [Dec 12 17:29]  Materials Science-2017.jsonl
+│   │       └── [Dec 12 17:29]  Materials Science-2018.jsonl
+│   ├── [Dec 13 04:34]  MaterialsScience,2019-2020
+│   │   ├── [Dec 13 05:31]  test
+│   │   │   ├── [Dec 12 17:29]  Materials Science-2019.jsonl
+│   │   │   └── [Dec 12 17:29]  Materials Science-2020.jsonl
+│   │   ├── [Dec 13 05:31]  train
+│   │   │   ├── [Dec 12 17:30]  Materials Science-2019.gz-0000.json
+│   │   │   └── [Dec 12 17:30]  Materials Science-2020.gz-0000.json
+│   │   └── [Dec 13 05:31]  val
+│   │       ├── [Dec 12 17:29]  Materials Science-2019.jsonl
+│   │       └── [Dec 12 17:29]  Materials Science-2020.jsonl
+│   ├── [Dec 13 04:43]  MaterialsScience,2021-2021
+│   │   ├── [Dec 13 05:34]  test
+│   │   │   └── [Dec 12 17:29]  Materials Science-2021.jsonl
+│   │   ├── [Dec 13 05:34]  train
+│   │   │   └── [Dec 12 17:30]  Materials Science-2021.gz-0000.json
+│   │   └── [Dec 13 05:34]  val
+│   │       └── [Dec 12 17:29]  Materials Science-2021.jsonl
+│   ├── [Dec 13 04:30]  Mathematics,2007-2009
+│   │   ├── [Dec 13 05:40]  test
+│   │   │   ├── [Dec 12 17:29]  Mathematics-2007.jsonl
+│   │   │   ├── [Dec 12 17:29]  Mathematics-2008.jsonl
+│   │   │   └── [Dec 12 17:29]  Mathematics-2009.jsonl
+│   │   ├── [Dec 13 05:40]  train
+│   │   │   ├── [Dec 12 17:30]  Mathematics-2007.gz-0000.json
+│   │   │   ├── [Dec 12 17:30]  Mathematics-2008.gz-0000.json
+│   │   │   └── [Dec 12 17:30]  Mathematics-2009.gz-0000.json
+│   │   └── [Dec 13 05:40]  val
+│   │       ├── [Dec 12 17:29]  Mathematics-2007.jsonl
+│   │       ├── [Dec 12 17:29]  Mathematics-2008.jsonl
+│   │       └── [Dec 12 17:29]  Mathematics-2009.jsonl
+│   ├── [Dec 13 04:44]  Mathematics,2016-2017
+│   │   ├── [Dec 13 05:34]  test
+│   │   │   ├── [Dec 12 17:29]  Mathematics-2016.jsonl
+│   │   │   └── [Dec 12 17:29]  Mathematics-2017.jsonl
+│   │   ├── [Dec 13 05:34]  train
+│   │   │   ├── [Dec 12 17:30]  Mathematics-2016.gz-0000.json
+│   │   │   └── [Dec 12 17:30]  Mathematics-2017.gz-0000.json
+│   │   └── [Dec 13 05:34]  val
+│   │       ├── [Dec 12 17:30]  Mathematics-2016.jsonl
+│   │       └── [Dec 12 17:30]  Mathematics-2017.jsonl
+│   ├── [Dec 13 04:37]  Mathematics,2018-2018
+│   │   ├── [Dec 13 05:40]  test
+│   │   │   └── [Dec 12 17:30]  Mathematics-2018.jsonl
+│   │   ├── [Dec 13 05:40]  train
+│   │   │   └── [Dec 12 17:30]  Mathematics-2018.gz-0000.json
+│   │   └── [Dec 13 05:40]  val
+│   │       └── [Dec 12 17:30]  Mathematics-2018.jsonl
+│   ├── [Dec 13 04:39]  Mathematics,2019-2019
+│   │   ├── [Dec 13 05:33]  test
+│   │   │   └── [Dec 12 17:30]  Mathematics-2019.jsonl
+│   │   ├── [Dec 13 05:33]  train
+│   │   │   └── [Dec 12 17:30]  Mathematics-2019.gz-0000.json
+│   │   └── [Dec 13 05:33]  val
+│   │       └── [Dec 12 17:30]  Mathematics-2019.jsonl
+│   ├── [Dec 13 04:43]  Mathematics,2020-2020
+│   │   ├── [Dec 13 05:41]  test
+│   │   │   └── [Dec 12 17:30]  Mathematics-2020.jsonl
+│   │   ├── [Dec 13 05:41]  train
+│   │   │   └── [Dec 12 17:35]  Mathematics-2020.gz-0000.json
+│   │   └── [Dec 13 05:41]  val
+│   │       └── [Dec 12 17:30]  Mathematics-2020.jsonl
+│   ├── [Dec 13 04:30]  Medicine,2007-2009
+│   │   ├── [Dec 13 05:36]  test
+│   │   │   ├── [Dec 12 17:30]  Medicine-2007.jsonl
+│   │   │   ├── [Dec 12 17:30]  Medicine-2008.jsonl
+│   │   │   └── [Dec 12 17:30]  Medicine-2009.jsonl
+│   │   ├── [Dec 13 05:36]  train
+│   │   │   ├── [Dec 12 17:30]  Medicine-2007.gz-0000.json
+│   │   │   ├── [Dec 12 17:30]  Medicine-2008.gz-0000.json
+│   │   │   └── [Dec 12 17:32]  Medicine-2009.gz-0000.json
+│   │   └── [Dec 13 05:36]  val
+│   │       ├── [Dec 12 17:30]  Medicine-2007.jsonl
+│   │       ├── [Dec 12 17:30]  Medicine-2008.jsonl
+│   │       └── [Dec 12 17:30]  Medicine-2009.jsonl
+│   ├── [Dec 13 04:40]  Medicine,2016-2016
+│   │   ├── [Dec 13 05:31]  test
+│   │   │   └── [Dec 12 17:30]  Medicine-2016.jsonl
+│   │   ├── [Dec 13 05:31]  train
+│   │   │   └── [Dec 12 17:33]  Medicine-2016.gz-0000.json
+│   │   └── [Dec 13 05:31]  val
+│   │       └── [Dec 12 17:30]  Medicine-2016.jsonl
+│   ├── [Dec 13 04:45]  Medicine,2017-2017
+│   │   ├── [Dec 13 05:31]  test
+│   │   │   └── [Dec 12 17:30]  Medicine-2017.jsonl
+│   │   └── [Dec 13 05:32]  train
+│   │       └── [Dec 12 17:34]  Medicine-2017.gz-0000.json
+│   ├── [Dec 13 04:36]  Medicine,2018-2018
+│   │   ├── [Dec 13 05:36]  test
+│   │   │   └── [Dec 12 17:31]  Medicine-2018.jsonl
+│   │   ├── [Dec 13 05:37]  train
+│   │   │   └── [Dec 12 17:34]  Medicine-2018.gz-0000.json
+│   │   └── [Dec 13 05:37]  val
+│   │       └── [Dec 12 17:30]  Medicine-2018.jsonl
+│   ├── [Dec 13 04:39]  Medicine,2019-2019
+│   │   ├── [Dec 13 05:35]  test
+│   │   │   └── [Dec 12 17:30]  Medicine-2019.jsonl
+│   │   ├── [Dec 13 05:35]  train
+│   │   │   └── [Dec 12 17:34]  Medicine-2019.gz-0000.json
+│   │   └── [Dec 13 05:35]  val
+│   │       └── [Dec 12 17:31]  Medicine-2019.jsonl
+│   ├── [Dec 13 04:44]  Medicine,2020-2020
+│   │   ├── [Dec 13 05:39]  test
+│   │   │   └── [Dec 12 17:31]  Medicine-2020.jsonl
+│   │   ├── [Dec 13 05:39]  train
+│   │   │   └── [Dec 12 17:36]  Medicine-2020.gz-0000.json
+│   │   └── [Dec 13 05:39]  val
+│   │       └── [Dec 12 17:31]  Medicine-2020.jsonl
+│   ├── [Dec 13 04:37]  NA,2020-2022
+│   │   ├── [Dec 13 05:31]  test
+│   │   │   ├── [Dec 12 17:33]  NA-2020.jsonl
+│   │   │   ├── [Dec 12 17:33]  NA-2021.jsonl
+│   │   │   └── [Dec 12 17:33]  NA-2022.jsonl
+│   │   ├── [Dec 13 05:31]  train
+│   │   │   ├── [Dec 12 17:34]  NA-2020.gz-0000.json
+│   │   │   ├── [Dec 12 17:34]  NA-2021.gz-0000.json
+│   │   │   └── [Dec 12 17:34]  NA-2022.gz-0000.json
+│   │   └── [Dec 13 05:31]  val
+│   │       ├── [Dec 12 17:34]  NA-2020.jsonl
+│   │       ├── [Dec 12 17:34]  NA-2021.jsonl
+│   │       └── [Dec 12 17:34]  NA-2022.jsonl
+│   ├── [Dec 13 04:32]  Physics,2016-2016
+│   │   ├── [Dec 13 05:38]  test
+│   │   │   └── [Dec 12 17:34]  Physics-2016.jsonl
+│   │   ├── [Dec 13 05:39]  train
+│   │   │   └── [Dec 12 17:35]  Physics-2016.gz-0000.json
+│   │   └── [Dec 13 05:39]  val
+│   │       └── [Dec 12 17:34]  Physics-2016.jsonl
+│   ├── [Dec 13 04:30]  Physics,2017-2017
+│   │   ├── [Dec 13 05:32]  test
+│   │   │   └── [Dec 12 17:34]  Physics-2017.jsonl
+│   │   ├── [Dec 13 05:33]  train
+│   │   │   └── [Dec 12 17:35]  Physics-2017.gz-0000.json
+│   │   └── [Dec 13 05:33]  val
+│   │       └── [Dec 12 17:34]  Physics-2017.jsonl
+│   ├── [Dec 13 04:33]  Physics,2020-2020
+│   │   ├── [Dec 13 05:32]  test
+│   │   │   └── [Dec 12 17:35]  Physics-2020.jsonl
+│   │   ├── [Dec 13 05:32]  train
+│   │   │   └── [Dec 12 17:36]  Physics-2020.gz-0000.json
+│   │   └── [Dec 13 05:32]  val
+│   │       └── [Dec 12 17:35]  Physics-2020.jsonl
+│   ├── [Dec 13 04:31]  Physics,2021-2021
+│   │   ├── [Dec 13 05:37]  test
+│   │   │   └── [Dec 12 17:35]  Physics-2021.jsonl
+│   │   ├── [Dec 13 05:37]  train
+│   │   │   └── [Dec 12 17:36]  Physics-2021.gz-0000.json
+│   │   └── [Dec 13 05:37]  val
+│   │       └── [Dec 12 17:35]  Physics-2021.jsonl
+│   ├── [Dec 13 04:38]  Physics,2022-2022
+│   │   ├── [Dec 13 05:34]  test
+│   │   │   └── [Dec 12 17:35]  Physics-2022.jsonl
+│   │   ├── [Dec 13 05:35]  train
+│   │   │   └── [Dec 12 17:36]  Physics-2022.gz-0000.json
+│   │   └── [Dec 13 05:35]  val
+│   │       └── [Dec 12 17:35]  Physics-2022.jsonl
+│   ├── [Dec 13 04:45]  PoliticalScience,2020-2022
+│   │   ├── [Dec 13 05:32]  test
+│   │   │   ├── [Dec 12 17:35]  Law-2020.jsonl
+│   │   │   ├── [Dec 12 17:35]  Law-2021.jsonl
+│   │   │   ├── [Dec 12 17:35]  Law-2022.jsonl
+│   │   │   ├── [Dec 12 17:35]  Political Science-2020.jsonl
+│   │   │   ├── [Dec 12 17:35]  Political Science-2021.jsonl
+│   │   │   └── [Dec 12 17:35]  Political Science-2022.jsonl
+│   │   ├── [Dec 13 05:32]  train
+│   │   │   ├── [Dec 12 17:35]  Law-2020.gz-0000.json
+│   │   │   ├── [Dec 12 17:36]  Law-2021.gz-0000.json
+│   │   │   ├── [Dec 12 17:36]  Law-2022.gz-0000.json
+│   │   │   ├── [Dec 12 17:36]  Political Science-2020.gz-0000.json
+│   │   │   ├── [Dec 12 17:36]  Political Science-2021.gz-0000.json
+│   │   │   └── [Dec 12 17:36]  Political Science-2022.gz-0000.json
+│   │   └── [Dec 13 05:32]  val
+│   │       ├── [Dec 12 17:36]  Law-2020.jsonl
+│   │       ├── [Dec 12 17:36]  Law-2021.jsonl
+│   │       ├── [Dec 12 17:36]  Law-2022.jsonl
+│   │       ├── [Dec 12 17:36]  Political Science-2020.jsonl
+│   │       ├── [Dec 12 17:36]  Political Science-2021.jsonl
+│   │       └── [Dec 12 17:36]  Political Science-2022.jsonl
+│   ├── [Dec 13 04:45]  Psychology,2017-2018
+│   │   ├── [Dec 13 05:40]  test
+│   │   │   ├── [Dec 12 17:36]  Psychology-2017.jsonl
+│   │   │   └── [Dec 12 17:36]  Psychology-2018.jsonl
+│   │   ├── [Dec 13 05:40]  train
+│   │   │   ├── [Dec 12 17:36]  Psychology-2017.gz-0000.json
+│   │   │   └── [Dec 12 17:36]  Psychology-2018.gz-0000.json
+│   │   └── [Dec 13 05:40]  val
+│   │       ├── [Dec 12 17:36]  Psychology-2017.jsonl
+│   │       └── [Dec 12 17:36]  Psychology-2018.jsonl
+│   ├── [Dec 13 04:34]  Psychology,2019-2020
+│   │   ├── [Dec 13 05:32]  test
+│   │   │   ├── [Dec 12 17:36]  Psychology-2019.jsonl
+│   │   │   └── [Dec 12 17:36]  Psychology-2020.jsonl
+│   │   ├── [Dec 13 05:32]  train
+│   │   │   ├── [Dec 12 17:36]  Psychology-2019.gz-0000.json
+│   │   │   └── [Dec 12 17:36]  Psychology-2020.gz-0000.json
+│   │   └── [Dec 13 05:32]  val
+│   │       ├── [Dec 12 17:36]  Psychology-2019.jsonl
+│   │       └── [Dec 12 17:36]  Psychology-2020.jsonl
+│   ├── [Dec 13 04:41]  Psychology,2021-2021
+│   │   ├── [Dec 13 05:39]  test
+│   │   │   └── [Dec 12 17:36]  Psychology-2021.jsonl
+│   │   ├── [Dec 13 05:39]  train
+│   │   │   └── [Dec 12 17:36]  Psychology-2021.gz-0000.json
+│   │   └── [Dec 13 05:39]  val
+│   │       └── [Dec 12 17:36]  Psychology-2021.jsonl
+│   └── [Dec 12 17:36]  README.md
+├── [Dec 13 05:42]  src
+│   ├── [Dec 13 04:44]  __init__.py
+│   ├── [Dec 13 05:42]  __pycache__
+│   │   └── [Dec 13 05:42]  __init__.cpython-312.pyc
+│   ├── [Dec 13 05:03]  analysis
+│   │   ├── [Dec 13 04:45]  __init__.py
+│   │   ├── [Dec 13 04:45]  adoption_dynamics.py
+│   │   ├── [Dec 13 05:02]  discovery_impact.py
+│   │   ├── [Dec 13 05:03]  ml_impact.py
+│   │   └── [Dec 13 05:02]  quality_tradeoffs.py
+│   ├── [Dec 13 04:43]  api
+│   ├── [Dec 13 05:28]  config.py
+│   ├── [Dec 13 05:42]  data
+│   │   ├── [Dec 13 04:44]  __init__.py
+│   │   ├── [Dec 13 05:42]  __pycache__
+│   │   │   ├── [Dec 13 05:04]  __init__.cpython-312.pyc
+│   │   │   ├── [Dec 13 05:42]  loader.cpython-312.pyc
+│   │   │   └── [Dec 13 05:05]  preprocessor.cpython-312.pyc
+│   │   ├── [Dec 13 05:42]  loader.py
+│   │   └── [Dec 13 04:44]  preprocessor.py
+│   ├── [Dec 13 05:15]  graph
+│   │   ├── [Dec 13 05:09]  __init__.py
+│   │   ├── [Dec 13 05:15]  __pycache__
+│   │   │   ├── [Dec 13 05:15]  __init__.cpython-312.pyc
+│   │   │   ├── [Dec 13 05:15]  citation_graph.cpython-312.pyc
+│   │   │   ├── [Dec 13 05:15]  graph_analysis.cpython-312.pyc
+│   │   │   └── [Dec 13 05:15]  graph_rag.cpython-312.pyc
+│   │   ├── [Dec 13 05:09]  citation_graph.py
+│   │   ├── [Dec 13 05:10]  graph_analysis.py
+│   │   └── [Dec 13 05:12]  graph_rag.py
+│   ├── [Dec 13 05:15]  metrics
+│   │   ├── [Dec 13 05:15]  __init__.py
+│   │   ├── [Dec 13 05:15]  __pycache__
+│   │   │   ├── [Dec 13 05:15]  __init__.cpython-312.pyc
+│   │   │   └── [Dec 13 05:15]  impact_metrics.cpython-312.pyc
+│   │   └── [Dec 13 05:13]  impact_metrics.py
+│   ├── [Dec 13 04:43]  models
+│   └── [Dec 13 04:43]  visualization
+└── [Dec 13 04:33]  track.txt
+
+207 directories, 278 files

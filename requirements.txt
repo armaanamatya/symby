@@ -1,0 +1,30 @@
+# AI Research Impact Observatory
+# DGX Spark Frontier Hackathon - Symby AI Track
+
+# Core data processing
+pandas>=2.0.0
+numpy>=1.24.0
+pyarrow>=14.0.0
+
+# GPU-accelerated (RAPIDS) - install via conda:
+# conda install -c rapidsai -c conda-forge -c nvidia rapids=24.10
+# cudf-cu12
+# cuml-cu12
+# cugraph-cu12
+
+# Web dashboard
+streamlit>=1.29.0
+plotly>=5.18.0
+
+# Statistical analysis
+scipy>=1.11.0
+
+# Graph processing (CPU fallback)
+networkx>=3.2
+
+# Utilities
+tqdm>=4.66.0
+orjson>=3.9.0
+
+# HTTP requests (for Semantic Scholar API)
+requests>=2.31.0
