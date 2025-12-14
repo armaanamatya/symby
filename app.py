@@ -21,6 +21,9 @@ import pandas as pd
 import numpy as np
 import sys
 import os
+import requests
+import time
+import re
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -842,6 +845,426 @@ def render_classification(dashboard_data):
 
 
 # =============================================================================
+# PAPER CODE EXECUTOR TAB
+# =============================================================================
+
+def extract_metrics_from_output(stdout: str) -> dict:
+    """
+    Extract numeric metrics from execution output.
+    Looks for common patterns like 'accuracy: 0.95', 'loss=2.3', etc.
+    """
+    metrics = {}
+
+    # Common metric patterns
+    patterns = [
+        r'(?:accuracy|acc)[:\s=]+([0-9.]+)%?',
+        r'(?:loss)[:\s=]+([0-9.]+)',
+        r'(?:precision)[:\s=]+([0-9.]+)%?',
+        r'(?:recall)[:\s=]+([0-9.]+)%?',
+        r'(?:f1[-_]?score|f1)[:\s=]+([0-9.]+)%?',
+        r'(?:auc|auroc)[:\s=]+([0-9.]+)',
+        r'(?:top-?1)[:\s=]+([0-9.]+)%?',
+        r'(?:top-?5)[:\s=]+([0-9.]+)%?',
+        r'(?:mse|mae|rmse)[:\s=]+([0-9.]+)',
+        r'(?:bleu)[:\s=]+([0-9.]+)',
+        r'(?:perplexity|ppl)[:\s=]+([0-9.]+)',
+    ]
+
+    for pattern in patterns:
+        matches = re.findall(pattern, stdout, re.IGNORECASE)
+        if matches:
+            # Extract metric name from pattern
+            metric_name = pattern.split('(?:')[1].split(')')[0].replace('|', '_').replace('[-_]?', '_')
+            # Take the last value found (usually the final result)
+            try:
+                metrics[metric_name] = float(matches[-1])
+            except ValueError:
+                pass
+
+    return metrics
+
+
+def render_pce_tab():
+    """Render the Paper Code Executor tab"""
+    st.markdown('<p class="section-header">📄 Paper Code Executor</p>', unsafe_allow_html=True)
+    st.markdown("*Extract, execute, and validate code from research papers in isolated sandboxes*")
+
+    # Initialize session state for PCE
+    if "pce_code_manifest" not in st.session_state:
+        st.session_state.pce_code_manifest = None
+    if "pce_execution_result" not in st.session_state:
+        st.session_state.pce_execution_result = None
+    if "pce_validation_result" not in st.session_state:
+        st.session_state.pce_validation_result = None
+    if "pce_error" not in st.session_state:
+        st.session_state.pce_error = None
+
+    # API base URL - configurable
+    api_base_url = st.sidebar.text_input(
+        "🔗 PCE API URL",
+        value="http://localhost:8000",
+        help="Base URL for the Paper Code Executor API"
+    )
+
+    # ==========================================================================
+    # INPUT SECTION
+    # ==========================================================================
+    st.subheader("🔍 Paper Input")
+
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        paper_id = st.text_input(
+            "Paper ID",
+            placeholder="arxiv:2010.11929 or DOI",
+            help="Enter arXiv ID (e.g., arxiv:2010.11929) or DOI"
+        )
+    with col2:
+        st.write("")  # Spacing
+        st.write("")
+        extract_btn = st.button("🔍 Extract Code", type="primary")
+
+    # ==========================================================================
+    # EXTRACTION SECTION
+    # ==========================================================================
+    if extract_btn and paper_id:
+        st.session_state.pce_code_manifest = None
+        st.session_state.pce_execution_result = None
+        st.session_state.pce_validation_result = None
+        st.session_state.pce_error = None
+
+        with st.spinner("Extracting code from paper..."):
+            try:
+                # Start extraction job
+                response = requests.post(
+                    f"{api_base_url}/api/pce/extract",
+                    json={"paper_id": paper_id},
+                    timeout=30
+                )
+                response.raise_for_status()
+                job_data = response.json()
+                job_id = job_data.get("job_id")
+
+                if not job_id:
+                    st.error("Failed to start extraction job: No job ID returned")
+                    st.session_state.pce_error = "No job ID returned"
+                else:
+                    # Poll for completion
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    max_polls = 60  # Max 60 seconds
+
+                    for i in range(max_polls):
+                        status_response = requests.get(
+                            f"{api_base_url}/api/pce/extract/{job_id}",
+                            timeout=10
+                        )
+                        status_response.raise_for_status()
+                        status_data = status_response.json()
+
+                        status = status_data.get("status", "unknown")
+                        status_text.text(f"Status: {status}")
+                        progress_bar.progress((i + 1) / max_polls)
+
+                        if status == "complete":
+                            st.session_state.pce_code_manifest = status_data.get("code_manifest")
+                            progress_bar.progress(1.0)
+                            st.success("✅ Code extraction complete!")
+                            break
+                        elif status == "error":
+                            st.session_state.pce_error = status_data.get("error", "Unknown error")
+                            st.error(f"❌ Extraction failed: {st.session_state.pce_error}")
+                            break
+
+                        time.sleep(1)
+                    else:
+                        st.warning("⏱️ Extraction timed out. Please try again.")
+
+            except requests.exceptions.ConnectionError:
+                st.error(f"❌ Cannot connect to API at {api_base_url}. Please check if the server is running.")
+                st.session_state.pce_error = "Connection error"
+            except requests.exceptions.Timeout:
+                st.error("❌ Request timed out. Please try again.")
+                st.session_state.pce_error = "Timeout"
+            except requests.exceptions.HTTPError as e:
+                st.error(f"❌ HTTP Error: {e}")
+                st.session_state.pce_error = str(e)
+            except Exception as e:
+                st.error(f"❌ Unexpected error: {e}")
+                st.session_state.pce_error = str(e)
+
+    # ==========================================================================
+    # EXTRACTED CODE DISPLAY
+    # ==========================================================================
+    if st.session_state.pce_code_manifest:
+        st.markdown("---")
+        st.subheader("📦 Extracted Code")
+
+        manifest = st.session_state.pce_code_manifest
+        code_blocks = manifest.get("code_blocks", [])
+
+        with st.expander(f"📄 {len(code_blocks)} code blocks found", expanded=True):
+            for i, block in enumerate(code_blocks):
+                st.markdown(f"**Block {i + 1}** ({block.get('language', 'unknown')})")
+                st.code(block.get("code", ""), language=block.get("language", "python"))
+
+        # Metadata display
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            framework = manifest.get("framework", "Unknown")
+            st.info(f"🔧 **Framework:** {framework}")
+        with col2:
+            deps = manifest.get("dependencies", [])
+            st.info(f"📦 **Dependencies:** {len(deps)} packages")
+        with col3:
+            repos = manifest.get("github_repos", [])
+            st.info(f"🔗 **GitHub Repos:** {len(repos)} found")
+
+        # Show dependencies in expander
+        if deps:
+            with st.expander("📋 Dependencies"):
+                for dep in deps:
+                    st.text(f"• {dep}")
+
+        # Show GitHub repos if found
+        if repos:
+            with st.expander("🔗 GitHub Repositories"):
+                for repo in repos:
+                    st.markdown(f"• [{repo}]({repo})")
+
+        # ==========================================================================
+        # EXECUTION SECTION
+        # ==========================================================================
+        st.markdown("---")
+        st.subheader("▶️ Execution")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            env = st.selectbox(
+                "Environment",
+                ["pytorch", "tensorflow", "jax"],
+                help="Select the ML framework environment for execution"
+            )
+        with col2:
+            timeout = st.number_input(
+                "Timeout (seconds)",
+                min_value=60,
+                max_value=600,
+                value=300,
+                help="Maximum execution time in seconds"
+            )
+
+        execute_btn = st.button("▶️ Execute in Sandbox", type="primary")
+
+        if execute_btn:
+            st.session_state.pce_execution_result = None
+            st.session_state.pce_validation_result = None
+
+            with st.spinner("Running code in isolated container..."):
+                try:
+                    # Start execution job
+                    response = requests.post(
+                        f"{api_base_url}/api/pce/execute",
+                        json={
+                            "code_manifest_id": manifest.get("id"),
+                            "environment": env,
+                            "timeout_seconds": timeout
+                        },
+                        timeout=30
+                    )
+                    response.raise_for_status()
+                    job_data = response.json()
+                    job_id = job_data.get("job_id")
+
+                    if not job_id:
+                        st.error("Failed to start execution job: No job ID returned")
+                    else:
+                        # Poll for completion with live output
+                        output_placeholder = st.empty()
+                        progress_bar = st.progress(0)
+                        max_polls = timeout + 30  # Extra buffer for setup
+
+                        for i in range(max_polls):
+                            status_response = requests.get(
+                                f"{api_base_url}/api/pce/execute/{job_id}",
+                                timeout=10
+                            )
+                            status_response.raise_for_status()
+                            result_data = status_response.json()
+
+                            status = result_data.get("status", "unknown")
+                            progress_bar.progress(min((i + 1) / max_polls, 0.95))
+
+                            # Show live output if available
+                            if result_data.get("result"):
+                                stdout = result_data["result"].get("stdout", "")
+                                if stdout:
+                                    output_placeholder.code(stdout[-2000:], language="bash")
+
+                            if status in ["complete", "error", "timeout"]:
+                                st.session_state.pce_execution_result = result_data.get("result")
+                                progress_bar.progress(1.0)
+                                if status == "complete":
+                                    st.success("✅ Execution complete!")
+                                elif status == "timeout":
+                                    st.warning("⏱️ Execution timed out")
+                                else:
+                                    st.error("❌ Execution failed")
+                                break
+
+                            time.sleep(1)
+                        else:
+                            st.warning("⏱️ Polling timed out")
+
+                except requests.exceptions.ConnectionError:
+                    st.error(f"❌ Cannot connect to API at {api_base_url}")
+                except requests.exceptions.Timeout:
+                    st.error("❌ Request timed out")
+                except requests.exceptions.HTTPError as e:
+                    st.error(f"❌ HTTP Error: {e}")
+                except Exception as e:
+                    st.error(f"❌ Unexpected error: {e}")
+
+    # ==========================================================================
+    # EXECUTION RESULTS DISPLAY
+    # ==========================================================================
+    if st.session_state.pce_execution_result:
+        result = st.session_state.pce_execution_result
+
+        st.markdown("---")
+        st.subheader("📊 Execution Output")
+
+        # Main output
+        stdout = result.get("stdout", "")
+        if stdout:
+            st.code(stdout, language="bash")
+        else:
+            st.info("No stdout output")
+
+        # Stderr in expander
+        stderr = result.get("stderr", "")
+        if stderr:
+            with st.expander("⚠️ Stderr", expanded=False):
+                st.code(stderr, language="bash")
+
+        # Metrics display
+        cols = st.columns(3)
+
+        status = result.get("status", "unknown")
+        status_icon = "✅" if status == "success" else "❌"
+        cols[0].metric("Status", f"{status_icon} {status.capitalize()}")
+
+        exec_time = result.get("execution_time_seconds", 0)
+        cols[1].metric("Time", f"{exec_time:.1f}s")
+
+        memory = result.get("memory_peak_mb", 0)
+        cols[2].metric("Memory", f"{memory:.0f} MB")
+
+        # ==========================================================================
+        # VALIDATION SECTION
+        # ==========================================================================
+        st.markdown("---")
+        st.subheader("📊 Validation")
+
+        validate_btn = st.button("📊 Validate Against Paper Claims", type="primary")
+
+        if validate_btn:
+            with st.spinner("Comparing results to paper claims..."):
+                try:
+                    extracted_metrics = extract_metrics_from_output(stdout)
+
+                    response = requests.post(
+                        f"{api_base_url}/api/pce/validate",
+                        json={
+                            "paper_id": st.session_state.pce_code_manifest.get("paper_id"),
+                            "execution_results": {
+                                "stdout": stdout,
+                                "metrics": extracted_metrics
+                            }
+                        },
+                        timeout=60
+                    )
+                    response.raise_for_status()
+                    validation_data = response.json()
+                    st.session_state.pce_validation_result = validation_data.get("validation_result")
+                    st.success("✅ Validation complete!")
+
+                except requests.exceptions.ConnectionError:
+                    st.error(f"❌ Cannot connect to API at {api_base_url}")
+                except requests.exceptions.Timeout:
+                    st.error("❌ Validation request timed out")
+                except requests.exceptions.HTTPError as e:
+                    st.error(f"❌ HTTP Error: {e}")
+                except Exception as e:
+                    st.error(f"❌ Unexpected error: {e}")
+
+    # ==========================================================================
+    # VALIDATION RESULTS DISPLAY
+    # ==========================================================================
+    if st.session_state.pce_validation_result:
+        validation = st.session_state.pce_validation_result
+
+        st.markdown("---")
+        st.subheader("✅ Validation Results")
+
+        claims_tested = validation.get("claims_tested", [])
+
+        if claims_tested:
+            for claim in claims_tested:
+                with st.container():
+                    cols = st.columns([3, 1, 1])
+
+                    metric_name = claim.get("metric_name", "Unknown")
+                    claimed_value = claim.get("claimed_value", "N/A")
+                    actual_value = claim.get("actual_value", "N/A")
+                    passed = claim.get("passed", False)
+                    difference_pct = claim.get("difference_pct", 0)
+
+                    cols[0].markdown(f"**{metric_name}**: Claimed {claimed_value}")
+                    cols[1].markdown(f"Actual: **{actual_value}**")
+
+                    if passed:
+                        cols[2].success("✅ Pass")
+                    else:
+                        cols[2].warning(f"⚠️ {difference_pct:.1f}% off")
+
+            # Overall summary
+            claims_passed = validation.get("claims_passed", 0)
+            total_claims = validation.get("total_claims", len(claims_tested))
+
+            st.markdown("---")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric(
+                    "Overall Verification",
+                    f"{claims_passed}/{total_claims} claims verified"
+                )
+            with col2:
+                pass_rate = (claims_passed / total_claims * 100) if total_claims > 0 else 0
+                if pass_rate >= 80:
+                    st.success(f"🎉 High reproducibility ({pass_rate:.0f}%)")
+                elif pass_rate >= 50:
+                    st.warning(f"⚠️ Partial reproducibility ({pass_rate:.0f}%)")
+                else:
+                    st.error(f"❌ Low reproducibility ({pass_rate:.0f}%)")
+        else:
+            st.info("No claims were tested. The validation system may not have found comparable metrics.")
+
+    # ==========================================================================
+    # EMPTY STATE
+    # ==========================================================================
+    if not st.session_state.pce_code_manifest and not st.session_state.pce_error:
+        st.markdown("---")
+        st.info("""
+        👆 **Getting Started:**
+        1. Enter a paper ID (arXiv or DOI format)
+        2. Click "Extract Code" to analyze the paper
+        3. Review extracted code blocks and dependencies
+        4. Execute in an isolated sandbox environment
+        5. Validate results against paper claims
+        """)
+
+
+# =============================================================================
 # MAIN APP
 # =============================================================================
 
@@ -887,12 +1310,13 @@ def main():
     st.markdown("---")
 
     # Tabs for objectives
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📊 ML Impact",
         "📈 Adoption Dynamics",
         "⚖️ Quality Trade-offs",
         "🔍 Discovery Impact",
-        "🏷️ Classification"
+        "🏷️ Classification",
+        "📄 Paper Code Executor"
     ])
 
     with tab1:
@@ -909,6 +1333,9 @@ def main():
 
     with tab5:
         render_classification(dashboard_data)
+
+    with tab6:
+        render_pce_tab()
 
     # Footer
     st.markdown("---")
