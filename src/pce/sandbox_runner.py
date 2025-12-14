@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -148,14 +149,18 @@ if stats:
         self.require_gpu = require_gpu
         self.cuda_visible_devices = cuda_visible_devices
 
-        # Initialize Docker client
+        # Initialize Docker client (with graceful fallback)
+        self.client = None
+        self._docker_available = False
         try:
             self.client = docker.from_env()
             self.client.ping()
+            self._docker_available = True
             logger.info("Docker client initialized successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize Docker client: {e}")
-            raise RuntimeError(f"Docker client initialization failed: {e}")
+            logger.warning(f"Failed to initialize Docker client: {e}")
+            logger.warning("Docker unavailable - will use subprocess fallback for code execution")
+            self.client = None
 
         # Calculate resource limits
         self._memory_limit = f"{int(max_memory_gb)}g"
@@ -163,14 +168,14 @@ if stats:
         self._cpu_period = 100000
         self._cpu_quota = max_cpus * self._cpu_period
 
-        # Check GPU availability
+        # Check GPU availability (only if Docker is available)
         self._gpu_available = False
         self._gpu_info: Optional[GPUInfo] = None
-        if enable_gpu:
+        if enable_gpu and self._docker_available:
             self._check_gpu_availability()
 
         if require_gpu and not self._gpu_available:
-            raise RuntimeError("GPU required but not available")
+            raise RuntimeError("GPU required but not available (Docker may not be accessible)")
 
         logger.info(
             f"SandboxRunner configured: memory={self._memory_limit}, "
@@ -394,6 +399,158 @@ if stats:
         # Prepend GPU monitoring script
         return f"{self.GPU_MONITOR_SCRIPT}\n\n# User code\n{code}"
 
+    def _generate_requirements_file(self, code: str, workdir: str) -> Optional[str]:
+        """
+        Auto-detect and generate requirements.txt from imports in code.
+
+        Args:
+            code: Python code to analyze
+            workdir: Directory to write requirements.txt
+
+        Returns:
+            Path to requirements.txt if created, None otherwise
+        """
+        # Common package mappings (import name -> pip package)
+        IMPORT_TO_PIP = {
+            'cv2': 'opencv-python',
+            'PIL': 'Pillow',
+            'sklearn': 'scikit-learn',
+            'yaml': 'pyyaml',
+            'torch': 'torch',
+            'tensorflow': 'tensorflow',
+            'tf': 'tensorflow',
+            'jax': 'jax',
+            'numpy': 'numpy',
+            'pandas': 'pandas',
+            'matplotlib': 'matplotlib',
+            'seaborn': 'seaborn',
+            'scipy': 'scipy',
+            'transformers': 'transformers',
+            'datasets': 'datasets',
+            'accelerate': 'accelerate',
+            'tqdm': 'tqdm',
+            'requests': 'requests',
+            'bs4': 'beautifulsoup4',
+            'skimage': 'scikit-image',
+        }
+
+        # Standard library modules (don't need pip install)
+        stdlib = {
+            'os', 'sys', 'json', 'time', 'datetime', 'pathlib', 'typing',
+            'collections', 'itertools', 'functools', 'math', 're', 'logging',
+            'asyncio', 'subprocess', 'tempfile', 'shutil', 'hashlib', 'dataclasses',
+            'abc', 'argparse', 'base64', 'bisect', 'copy', 'csv', 'enum', 'glob',
+            'io', 'pickle', 'random', 'string', 'struct', 'threading', 'uuid', 'warnings',
+        }
+
+        # Detect imports
+        imports = set()
+        for line in code.split('\n'):
+            line = line.strip()
+            if line.startswith('import '):
+                # import numpy, import numpy as np
+                parts = line[7:].split(',')
+                for part in parts:
+                    module = part.strip().split(' as ')[0].split('.')[0]
+                    imports.add(module)
+            elif line.startswith('from '):
+                # from numpy import array
+                parts = line[5:].split(' import ')
+                if parts:
+                    module = parts[0].strip().split('.')[0]
+                    imports.add(module)
+
+        # Convert to pip packages (excluding stdlib)
+        requirements = []
+        for imp in imports:
+            if imp in stdlib:
+                continue
+            pip_name = IMPORT_TO_PIP.get(imp, imp)
+            requirements.append(pip_name)
+
+        if requirements:
+            req_path = os.path.join(workdir, "requirements.txt")
+            with open(req_path, "w") as f:
+                f.write('\n'.join(sorted(set(requirements))))
+            logger.info(f"Generated requirements.txt with {len(requirements)} packages")
+            return req_path
+
+        return None
+
+    async def _run_subprocess(
+        self,
+        code_dir: str,
+        start_time: float,
+        entrypoint: str = "exec_code.py"
+    ) -> ExecutionResult:
+        """
+        Fallback: Run code directly via subprocess when Docker is unavailable.
+        Less isolated but works when Docker has permission issues or isn't available.
+
+        Args:
+            code_dir: Directory containing code files
+            start_time: Execution start time
+            entrypoint: Python file to execute
+
+        Returns:
+            ExecutionResult with execution details
+        """
+        code_file = os.path.join(code_dir, entrypoint)
+
+        # Install requirements first if they exist
+        req_file = os.path.join(code_dir, "requirements.txt")
+        if os.path.exists(req_file):
+            try:
+                logger.info("Installing requirements via pip...")
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "--no-cache-dir", "-r", req_file],
+                    capture_output=True,
+                    timeout=120
+                )
+            except Exception as e:
+                logger.warning(f"Failed to install requirements: {e}")
+
+        try:
+            # Run the code file
+            logger.info(f"Executing {entrypoint} via subprocess fallback")
+            result = subprocess.run(
+                [sys.executable, code_file],
+                capture_output=True,
+                timeout=self.max_timeout_seconds,
+                cwd=code_dir
+            )
+
+            status = 'success' if result.returncode == 0 else 'error'
+
+            return ExecutionResult(
+                status=status,
+                stdout=result.stdout.decode('utf-8', errors='replace'),
+                stderr=result.stderr.decode('utf-8', errors='replace'),
+                exit_code=result.returncode,
+                execution_time_seconds=time.time() - start_time,
+                memory_peak_mb=0.0,  # Can't measure in subprocess mode
+            )
+
+        except subprocess.TimeoutExpired:
+            return ExecutionResult(
+                status='timeout',
+                stdout='',
+                stderr=f'Execution timed out after {self.max_timeout_seconds}s',
+                exit_code=-1,
+                execution_time_seconds=time.time() - start_time,
+                memory_peak_mb=0.0,
+            )
+        except Exception as e:
+            logger.error(f"Subprocess execution error: {e}")
+            return ExecutionResult(
+                status='error',
+                stdout='',
+                stderr=str(e),
+                exit_code=-1,
+                execution_time_seconds=time.time() - start_time,
+                memory_peak_mb=0.0,
+            )
+
     async def run(
         self,
         image: str,
@@ -424,15 +581,32 @@ if stats:
             ExecutionResult with execution details including GPU metrics
         """
         container = None
+        temp_dir = None
         start_time = time.time()
 
-        logger.info(f"Starting execution in image {image} (GPU: {self._gpu_available})")
+        logger.info(f"Starting execution in image {image} (GPU: {self._gpu_available}, Docker: {self._docker_available})")
 
+        # Prepare code and temp directory first (needed for both Docker and subprocess)
         try:
-            loop = asyncio.get_event_loop()
-
             # Prepare code with optional GPU monitoring
             exec_code = self._prepare_code_with_gpu_monitoring(code) if gpu_monitor else code
+
+            # Create temp directory with code file to avoid argument length limits
+            temp_dir = tempfile.mkdtemp(prefix="sandbox_code_")
+            code_file = os.path.join(temp_dir, "exec_code.py")
+            with open(code_file, "w") as f:
+                f.write(exec_code)
+
+            # Auto-detect and generate requirements file
+            self._generate_requirements_file(code, temp_dir)
+
+            # If Docker is not available, use subprocess fallback immediately
+            if not self._docker_available:
+                logger.info("Docker not available, using subprocess fallback")
+                return await self._run_subprocess(temp_dir, start_time)
+
+            # Docker is available, try to use it
+            loop = asyncio.get_event_loop()
 
             # Build environment
             env = self._get_gpu_environment()
@@ -441,7 +615,7 @@ if stats:
 
             run_kwargs = {
                 "image": image,
-                "command": ["python", "-c", exec_code],
+                "command": ["python", "/sandbox_code/exec_code.py"],
                 "detach": True,
                 "network_mode": "none",
                 "mem_limit": self._memory_limit,
@@ -452,6 +626,7 @@ if stats:
                 "security_opt": self._get_security_opts(),
                 "cap_drop": self._get_cap_drop(),
                 "environment": env,
+                "volumes": {temp_dir: {"bind": "/sandbox_code", "mode": "ro"}},
                 "remove": False,  # We'll remove after getting logs
             }
 
@@ -545,48 +720,75 @@ if stats:
                 gpu_memory_peak_mb=gpu_mem,  # Would need continuous monitoring for true peak
             )
 
-        except ImageNotFound:
-            logger.error(f"Image not found: {image}")
-            return ExecutionResult(
-                status="error",
-                stdout="",
-                stderr=f"Image not found: {image}",
-                exit_code=-1,
-                execution_time_seconds=time.time() - start_time,
-                memory_peak_mb=0.0,
-            )
+        except ImageNotFound as e:
+            logger.warning(f"Docker image not found: {image}, falling back to subprocess")
+            if temp_dir:
+                try:
+                    return await self._run_subprocess(temp_dir, start_time)
+                except Exception as fallback_error:
+                    logger.error(f"Subprocess fallback also failed: {fallback_error}")
+                    return ExecutionResult(
+                        status="error",
+                        stdout="",
+                        stderr=f"Docker failed (image not found) and subprocess fallback failed: {fallback_error}",
+                        exit_code=-1,
+                        execution_time_seconds=time.time() - start_time,
+                        memory_peak_mb=0.0,
+                    )
 
         except ContainerError as e:
-            logger.error(f"Container error: {e}")
-            stdout_log = ""
-            if e.container:
+            logger.warning(f"Container error: {e}, falling back to subprocess")
+            if temp_dir:
                 try:
-                    stdout_log = e.container.logs(stdout=True, stderr=False).decode()
-                except Exception:
-                    pass
-            return ExecutionResult(
-                status="error",
-                stdout=stdout_log,
-                stderr=str(e),
-                exit_code=e.exit_status,
-                execution_time_seconds=time.time() - start_time,
-                memory_peak_mb=0.0,
-            )
+                    return await self._run_subprocess(temp_dir, start_time)
+                except Exception as fallback_error:
+                    logger.error(f"Subprocess fallback also failed: {fallback_error}")
+                    stdout_log = ""
+                    if e.container:
+                        try:
+                            stdout_log = e.container.logs(stdout=True, stderr=False).decode()
+                        except Exception:
+                            pass
+                    return ExecutionResult(
+                        status="error",
+                        stdout=stdout_log,
+                        stderr=f"Docker failed: {e}, subprocess fallback failed: {fallback_error}",
+                        exit_code=e.exit_status,
+                        execution_time_seconds=time.time() - start_time,
+                        memory_peak_mb=0.0,
+                    )
 
         except APIError as e:
-            logger.error(f"Docker API error: {e}")
-            raise RuntimeError(f"Docker API error: {e}") from e
+            logger.warning(f"Docker API error: {e}, falling back to subprocess")
+            if temp_dir:
+                try:
+                    return await self._run_subprocess(temp_dir, start_time)
+                except Exception as fallback_error:
+                    logger.error(f"Subprocess fallback also failed: {fallback_error}")
+                    return ExecutionResult(
+                        status="error",
+                        stdout="",
+                        stderr=f"Docker API error: {e}, subprocess fallback failed: {fallback_error}",
+                        exit_code=-1,
+                        execution_time_seconds=time.time() - start_time,
+                        memory_peak_mb=0.0,
+                    )
 
         except Exception as e:
-            logger.error(f"Unexpected error during execution: {e}")
-            return ExecutionResult(
-                status="error",
-                stdout="",
-                stderr=str(e),
-                exit_code=-1,
-                execution_time_seconds=time.time() - start_time,
-                memory_peak_mb=0.0,
-            )
+            logger.warning(f"Unexpected error during Docker execution: {e}, falling back to subprocess")
+            if temp_dir:
+                try:
+                    return await self._run_subprocess(temp_dir, start_time)
+                except Exception as fallback_error:
+                    logger.error(f"Subprocess fallback also failed: {fallback_error}")
+                    return ExecutionResult(
+                        status="error",
+                        stdout="",
+                        stderr=f"Docker execution failed: {e}, subprocess fallback failed: {fallback_error}",
+                        exit_code=-1,
+                        execution_time_seconds=time.time() - start_time,
+                        memory_peak_mb=0.0,
+                    )
 
         finally:
             # Cleanup container
@@ -596,6 +798,14 @@ if stats:
                     logger.debug(f"Container {container.id[:12]} removed")
                 except Exception as e:
                     logger.warning(f"Failed to remove container: {e}")
+
+            # Cleanup temp directory
+            if temp_dir and os.path.exists(temp_dir):
+                try:
+                    shutil.rmtree(temp_dir)
+                    logger.debug(f"Cleaned up temp directory: {temp_dir}")
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup temp directory: {e}")
 
     async def run_with_files(
         self,
@@ -994,11 +1204,12 @@ if stats:
 
     def close(self):
         """Close Docker client connection."""
-        try:
-            self.client.close()
-            logger.info("Docker client closed")
-        except Exception as e:
-            logger.warning(f"Error closing Docker client: {e}")
+        if self.client is not None:
+            try:
+                self.client.close()
+                logger.info("Docker client closed")
+            except Exception as e:
+                logger.warning(f"Error closing Docker client: {e}")
 
     async def __aenter__(self):
         """Async context manager entry."""
