@@ -639,6 +639,81 @@ def run_code_in_sandbox(code: str, timeout: int = 60) -> dict:
         }
 
 
+def extract_code_from_arxiv(arxiv_id: str) -> dict:
+    """Extract code from an arXiv paper using PCE module."""
+    if not SANDBOX_SUPPORT:
+        return {
+            'success': False,
+            'error': 'PCE module not available',
+            'code_blocks': [],
+            'github_repos': [],
+            'framework': 'unknown',
+            'dependencies': []
+        }
+
+    try:
+        extractor = CodeExtractor()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            manifest = loop.run_until_complete(extractor.extract_from_arxiv(arxiv_id))
+            return {
+                'success': True,
+                'code_blocks': [
+                    {'language': b.language, 'code': b.code, 'source': b.source}
+                    for b in manifest.code_blocks
+                ],
+                'github_repos': manifest.github_repos,
+                'framework': manifest.framework,
+                'dependencies': list(manifest.dependencies)
+            }
+        finally:
+            loop.run_until_complete(extractor.close())
+            loop.close()
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'code_blocks': [],
+            'github_repos': [],
+            'framework': 'unknown',
+            'dependencies': []
+        }
+
+
+def extract_code_from_github(repo_url: str) -> dict:
+    """Extract code from a GitHub repository using PCE module."""
+    if not SANDBOX_SUPPORT:
+        return {
+            'success': False,
+            'error': 'PCE module not available',
+            'code_blocks': []
+        }
+
+    try:
+        extractor = CodeExtractor()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            code_blocks = loop.run_until_complete(extractor.extract_from_github(repo_url))
+            return {
+                'success': True,
+                'code_blocks': [
+                    {'language': b.language, 'code': b.code, 'source': b.source}
+                    for b in code_blocks
+                ]
+            }
+        finally:
+            loop.run_until_complete(extractor.close())
+            loop.close()
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'code_blocks': []
+        }
+
+
 def render_sandbox_section(paper_text: str, evaluation: dict, paper_id: str):
     """Render the sandbox execution section after paper analysis."""
     st.subheader("🚀 Code Sandbox")
@@ -663,30 +738,125 @@ def render_sandbox_section(paper_text: str, evaluation: dict, paper_id: str):
         st.session_state.sandbox_execution_result = None
     if 'sandbox_selected_code' not in st.session_state:
         st.session_state.sandbox_selected_code = ""
+    if 'sandbox_github_repos' not in st.session_state:
+        st.session_state.sandbox_github_repos = []
+    if 'sandbox_framework' not in st.session_state:
+        st.session_state.sandbox_framework = 'unknown'
+    if 'sandbox_dependencies' not in st.session_state:
+        st.session_state.sandbox_dependencies = []
 
-    # Extract Code Button
-    col1, col2 = st.columns([1, 1])
+    # Code Extraction Options
+    st.markdown("### 📥 Code Extraction Source")
+    extraction_source = st.radio(
+        "Choose extraction source:",
+        ["From Paper Text", "From arXiv ID", "From GitHub URL"],
+        horizontal=True,
+        key="extraction_source"
+    )
 
-    with col1:
-        if st.button("🔍 Extract Code from Paper", type="secondary", use_container_width=True):
-            with st.spinner("Extracting code blocks from paper..."):
-                code_blocks = extract_code_blocks_from_text(paper_text)
-                st.session_state.sandbox_code_blocks = code_blocks
+    if extraction_source == "From arXiv ID":
+        # arXiv ID input
+        arxiv_col1, arxiv_col2 = st.columns([3, 1])
+        with arxiv_col1:
+            arxiv_id = st.text_input(
+                "Enter arXiv ID:",
+                placeholder="e.g., 2010.11929 (Vision Transformer paper)",
+                help="Enter the arXiv paper ID to extract code and find GitHub repos"
+            )
+        with arxiv_col2:
+            st.write("")
+            st.write("")
+            extract_arxiv_btn = st.button("🔍 Extract from arXiv", type="primary", use_container_width=True)
 
-                if code_blocks:
-                    st.success(f"✅ Found {len(code_blocks)} code block(s)")
+        if extract_arxiv_btn and arxiv_id.strip():
+            with st.spinner(f"Extracting code from arXiv:{arxiv_id}..."):
+                result = extract_code_from_arxiv(arxiv_id.strip())
+
+                if result['success']:
+                    st.session_state.sandbox_code_blocks = result['code_blocks']
+                    st.session_state.sandbox_github_repos = result['github_repos']
+                    st.session_state.sandbox_framework = result['framework']
+                    st.session_state.sandbox_dependencies = result['dependencies']
+
+                    st.success(f"✅ Extracted {len(result['code_blocks'])} code block(s)")
+
+                    if result['github_repos']:
+                        st.info(f"🔗 Found {len(result['github_repos'])} GitHub repo(s): {', '.join(result['github_repos'])}")
+
+                    if result['framework'] != 'other':
+                        st.info(f"🔧 Detected framework: {result['framework']}")
+
+                    if result['dependencies']:
+                        st.info(f"📦 Dependencies: {', '.join(result['dependencies'][:10])}")
                 else:
-                    st.info("No executable code blocks found in the paper text.")
+                    st.error(f"❌ Failed to extract: {result.get('error', 'Unknown error')}")
 
-    with col2:
-        # Framework detection from ML adoption analysis
-        ml_adoption = evaluation.get('ml_adoption', {})
-        frameworks = ml_adoption.get('ml_frameworks_mentioned', [])
+        # Show GitHub repos and allow extraction
+        if st.session_state.sandbox_github_repos:
+            st.markdown("#### 🔗 GitHub Repositories Found in Paper")
+            for i, repo_url in enumerate(st.session_state.sandbox_github_repos):
+                repo_col1, repo_col2 = st.columns([3, 1])
+                with repo_col1:
+                    st.markdown(f"**{i+1}.** [{repo_url}]({repo_url})")
+                with repo_col2:
+                    if st.button(f"Extract Code", key=f"extract_github_{i}"):
+                        with st.spinner(f"Cloning and extracting from {repo_url}..."):
+                            github_result = extract_code_from_github(repo_url)
+                            if github_result['success']:
+                                # Append to existing code blocks
+                                st.session_state.sandbox_code_blocks.extend(github_result['code_blocks'])
+                                st.success(f"✅ Added {len(github_result['code_blocks'])} code block(s) from GitHub")
+                            else:
+                                st.error(f"❌ Failed: {github_result.get('error', 'Unknown error')}")
 
-        if frameworks:
-            st.info(f"🔧 Detected frameworks: {', '.join(frameworks)}")
-        else:
-            st.info("🔧 No specific ML frameworks detected")
+    elif extraction_source == "From GitHub URL":
+        # GitHub URL input
+        github_col1, github_col2 = st.columns([3, 1])
+        with github_col1:
+            github_url = st.text_input(
+                "Enter GitHub URL:",
+                placeholder="e.g., https://github.com/google-research/vision_transformer",
+                help="Enter a GitHub repository URL to extract code"
+            )
+        with github_col2:
+            st.write("")
+            st.write("")
+            extract_github_btn = st.button("🔍 Extract from GitHub", type="primary", use_container_width=True)
+
+        if extract_github_btn and github_url.strip():
+            with st.spinner(f"Cloning and extracting from {github_url}..."):
+                result = extract_code_from_github(github_url.strip())
+
+                if result['success']:
+                    st.session_state.sandbox_code_blocks = result['code_blocks']
+                    st.success(f"✅ Extracted {len(result['code_blocks'])} code block(s) from GitHub")
+                else:
+                    st.error(f"❌ Failed to extract: {result.get('error', 'Unknown error')}")
+
+    else:  # From Paper Text
+        # Extract Code Button
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            if st.button("🔍 Extract Code from Paper Text", type="secondary", use_container_width=True):
+                with st.spinner("Extracting code blocks from paper..."):
+                    code_blocks = extract_code_blocks_from_text(paper_text)
+                    st.session_state.sandbox_code_blocks = code_blocks
+
+                    if code_blocks:
+                        st.success(f"✅ Found {len(code_blocks)} code block(s)")
+                    else:
+                        st.info("No executable code blocks found in the paper text.")
+
+        with col2:
+            # Framework detection from ML adoption analysis
+            ml_adoption = evaluation.get('ml_adoption', {})
+            frameworks = ml_adoption.get('ml_frameworks_mentioned', [])
+
+            if frameworks:
+                st.info(f"🔧 Detected frameworks: {', '.join(frameworks)}")
+            else:
+                st.info("🔧 No specific ML frameworks detected")
 
     # Display extracted code blocks
     if st.session_state.sandbox_code_blocks:
