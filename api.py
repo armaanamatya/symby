@@ -965,6 +965,352 @@ async def get_pce_status() -> PCEStatusResponse:
 
 
 # =============================================================================
+# PAPER ANALYSIS ENDPOINTS
+# =============================================================================
+
+# Import paper analysis module
+try:
+    from src.paper_analysis import PaperAnalyzer, PaperAnalysisResult
+    from src.paper_analysis.executor import PaperCodeExecutor, PaperQueryEngine
+    PAPER_ANALYSIS_AVAILABLE = True
+except ImportError:
+    PAPER_ANALYSIS_AVAILABLE = False
+
+# Paper analysis state
+_paper_state = {
+    "analyzer": None,
+    "executor": None,
+    "query_engine": None,
+    "papers": {}  # paper_id -> analysis cache
+}
+
+
+def get_paper_analyzer():
+    """Get or initialize paper analyzer."""
+    if not PAPER_ANALYSIS_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Paper analysis module not available"
+        )
+    if _paper_state["analyzer"] is None:
+        _paper_state["analyzer"] = PaperAnalyzer(use_llm=True)
+    return _paper_state["analyzer"]
+
+
+def get_paper_executor():
+    """Get or initialize paper executor."""
+    if not PAPER_ANALYSIS_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Paper analysis module not available"
+        )
+    if _paper_state["executor"] is None:
+        _paper_state["executor"] = PaperCodeExecutor()
+    return _paper_state["executor"]
+
+
+def get_query_engine():
+    """Get or initialize query engine."""
+    if not PAPER_ANALYSIS_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Paper analysis module not available"
+        )
+    if _paper_state["query_engine"] is None:
+        _paper_state["query_engine"] = PaperQueryEngine()
+    return _paper_state["query_engine"]
+
+
+class PaperAnalyzeRequest(BaseModel):
+    """Request to analyze a paper."""
+    text: Optional[str] = Field(None, description="Paper text content")
+    paper_id: Optional[str] = Field(None, description="Paper identifier")
+    title: Optional[str] = Field(None, description="Paper title")
+    abstract: Optional[str] = Field(None, description="Paper abstract")
+    publication_date: Optional[str] = Field(None, description="Publication date")
+
+
+class PaperQueryRequest(BaseModel):
+    """Request to query a paper."""
+    paper_id: str = Field(..., description="Paper identifier")
+    question: str = Field(..., description="Question to answer")
+
+
+class CodeExecuteRequest(BaseModel):
+    """Request to execute code."""
+    code: str = Field(..., description="Code to execute")
+    language: str = Field(default="python", description="Programming language")
+    paper_id: Optional[str] = Field(None, description="Associated paper ID")
+
+
+class PaperCodeExecuteRequest(BaseModel):
+    """Request to execute code from a paper."""
+    paper_id: str = Field(..., description="Paper identifier")
+    code_block_index: int = Field(default=0, description="Index of code block to execute")
+
+
+@app.post("/api/paper/analyze", tags=["Paper Analysis"])
+async def analyze_paper(request: PaperAnalyzeRequest):
+    """
+    Analyze a paper and return structured JSON output.
+
+    Returns comprehensive analysis including:
+    - ML adoption metrics
+    - Reproducibility assessment
+    - Research outcomes
+    - Impact indicators
+    - Extracted code blocks
+    - GitHub repositories
+
+    The output format matches the s2orc_data JSON schema.
+    """
+    analyzer = get_paper_analyzer()
+
+    if not request.text:
+        raise HTTPException(
+            status_code=400,
+            detail="Paper text is required"
+        )
+
+    try:
+        result = analyzer.analyze(
+            text=request.text,
+            paper_id=request.paper_id,
+            title=request.title,
+            abstract=request.abstract,
+            publication_date=request.publication_date
+        )
+
+        # Cache for future queries
+        if result.paper_id:
+            _paper_state["papers"][result.paper_id] = {
+                "analysis": result,
+                "text": request.text
+            }
+
+        return result.to_dict()
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/paper/analyze/upload", tags=["Paper Analysis"])
+async def analyze_paper_upload(
+    file: bytes = None,
+    paper_id: Optional[str] = Query(None),
+    title: Optional[str] = Query(None)
+):
+    """
+    Analyze an uploaded PDF file.
+
+    Upload a PDF file to get structured JSON analysis.
+    """
+    analyzer = get_paper_analyzer()
+
+    if not file:
+        raise HTTPException(
+            status_code=400,
+            detail="PDF file is required"
+        )
+
+    try:
+        result = analyzer.analyze(
+            pdf_bytes=file,
+            paper_id=paper_id,
+            title=title
+        )
+
+        # Cache for future queries
+        if result.paper_id:
+            text = analyzer.extract_text_from_pdf_bytes(file)
+            _paper_state["papers"][result.paper_id] = {
+                "analysis": result,
+                "text": text
+            }
+
+        return result.to_dict()
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/paper/query", tags=["Paper Analysis"])
+async def query_paper(request: PaperQueryRequest):
+    """
+    Answer questions about an analyzed paper.
+
+    The paper must be analyzed first using /api/paper/analyze.
+    Uses RAG-style approach to answer questions based on paper content.
+    """
+    if request.paper_id not in _paper_state["papers"]:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Paper '{request.paper_id}' not found. Analyze it first."
+        )
+
+    analyzer = get_paper_analyzer()
+    cache = _paper_state["papers"][request.paper_id]
+    text = cache.get("text", "")
+
+    if not text:
+        raise HTTPException(
+            status_code=400,
+            detail="Paper text not available for querying"
+        )
+
+    try:
+        result = analyzer.query_paper(
+            text=text,
+            question=request.question,
+            paper_id=request.paper_id
+        )
+        return result
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/paper/{paper_id}", tags=["Paper Analysis"])
+async def get_paper_analysis(paper_id: str):
+    """
+    Get cached analysis for a paper.
+
+    Returns the stored analysis result for a previously analyzed paper.
+    """
+    if paper_id not in _paper_state["papers"]:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Paper '{paper_id}' not found"
+        )
+
+    cache = _paper_state["papers"][paper_id]
+    analysis = cache.get("analysis")
+
+    if analysis:
+        return analysis.to_dict()
+    else:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Analysis not found for paper '{paper_id}'"
+        )
+
+
+@app.get("/api/paper/{paper_id}/code", tags=["Paper Analysis"])
+async def get_paper_code(paper_id: str):
+    """
+    Get extracted code blocks from a paper.
+
+    Returns all code blocks extracted during analysis.
+    """
+    if paper_id not in _paper_state["papers"]:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Paper '{paper_id}' not found"
+        )
+
+    cache = _paper_state["papers"][paper_id]
+    analysis = cache.get("analysis")
+
+    if analysis:
+        return {
+            "paper_id": paper_id,
+            "code_blocks": [cb.to_dict() for cb in analysis.code_blocks],
+            "github_repos": analysis.github_repos
+        }
+    else:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Analysis not found for paper '{paper_id}'"
+        )
+
+
+@app.post("/api/paper/execute", tags=["Paper Analysis"])
+async def execute_code(request: CodeExecuteRequest):
+    """
+    Execute code in a sandbox environment.
+
+    Runs the provided code in an isolated Docker container.
+    Returns execution results including stdout, stderr, and metrics.
+    """
+    executor = get_paper_executor()
+
+    try:
+        result = await executor.execute_code(
+            code=request.code,
+            language=request.language
+        )
+
+        if request.paper_id:
+            result["paper_id"] = request.paper_id
+
+        return result
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/paper/{paper_id}/execute", tags=["Paper Analysis"])
+async def execute_paper_code(paper_id: str, request: PaperCodeExecuteRequest):
+    """
+    Execute a code block from an analyzed paper.
+
+    Runs the specified code block in an isolated sandbox.
+    The paper must be analyzed first.
+    """
+    if paper_id not in _paper_state["papers"]:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Paper '{paper_id}' not found. Analyze it first."
+        )
+
+    cache = _paper_state["papers"][paper_id]
+    analysis = cache.get("analysis")
+
+    if not analysis or not analysis.code_blocks:
+        raise HTTPException(
+            status_code=400,
+            detail="No code blocks found in paper"
+        )
+
+    executor = get_paper_executor()
+
+    try:
+        result = await executor.execute_paper_code(
+            analysis_result=analysis,
+            code_block_index=request.code_block_index
+        )
+        return result
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/papers", tags=["Paper Analysis"])
+async def list_papers():
+    """
+    List all analyzed papers.
+
+    Returns a list of paper IDs that have been analyzed.
+    """
+    papers = []
+    for paper_id, cache in _paper_state["papers"].items():
+        analysis = cache.get("analysis")
+        if analysis:
+            papers.append({
+                "paper_id": paper_id,
+                "field": analysis.field,
+                "ml_adoption_level": analysis.ml_adoption.ml_adoption_level,
+                "code_blocks_count": len(analysis.code_blocks),
+                "analyzed_at": analysis.analyzed_at
+            })
+
+    return {
+        "papers": papers,
+        "count": len(papers)
+    }
+
+
+# =============================================================================
 # HEALTH & METRICS
 # =============================================================================
 
@@ -974,7 +1320,9 @@ async def health_check():
     return {
         "status": "healthy",
         "data_loaded": _data_state["loaded"],
-        "papers_count": _data_state["papers_count"]
+        "papers_count": _data_state["papers_count"],
+        "paper_analysis_available": PAPER_ANALYSIS_AVAILABLE,
+        "analyzed_papers_count": len(_paper_state["papers"])
     }
 
 

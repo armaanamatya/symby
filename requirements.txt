@@ -6,6 +6,11 @@ pandas>=2.0.0
 numpy>=1.24.0
 pyarrow>=14.0.0
 
+# FastAPI server
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.0.0
+
 # GPU-accelerated (RAPIDS) - install via conda:
 # conda install -c rapidsai -c conda-forge -c nvidia rapids=24.10
 # cudf-cu12
