@@ -1,8 +1,8 @@
 """
 Paper Code Execution (PCE) Module
 
-Provides sandbox execution, Dockerfile generation, and validation of execution
-results against paper claims.
+Provides code extraction, sandbox execution, Dockerfile generation, and validation
+of execution results against paper claims.
 Optimized for NVIDIA DGX Spark with GB10 GPU (CUDA 13.0, Python 3.10).
 """
 
@@ -16,11 +16,17 @@ from .sandbox_runner import (
 )
 
 from .dockerfile_generator import (
-    CodeManifest,
+    CodeManifest as DockerCodeManifest,
     DockerConfig,
     DockerfileGenerator,
     KNOWN_PACKAGE_VERSIONS,
     BASE_IMAGES,
+)
+
+from .code_extractor import (
+    CodeBlock,
+    CodeManifest,
+    CodeExtractor,
 )
 
 from .validation_agent import (
@@ -56,11 +62,16 @@ __all__ = [
     "DGX_SPARK_CUDA_IMAGE",
 
     # Dockerfile generator
-    "CodeManifest",
+    "DockerCodeManifest",
     "DockerConfig",
     "DockerfileGenerator",
     "KNOWN_PACKAGE_VERSIONS",
     "BASE_IMAGES",
+
+    # Code extractor
+    "CodeBlock",
+    "CodeManifest",
+    "CodeExtractor",
 
     # Validation enums
     "ClaimType",
