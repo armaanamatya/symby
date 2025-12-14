@@ -533,11 +533,17 @@ def render_paper_upload():
             st.session_state['paper_text'] = paper_text
             st.session_state['paper_id'] = paper_id
 
-            # ==========================================================================
-            # SANDBOX EXECUTION SECTION
-            # ==========================================================================
-            st.markdown("---")
-            render_sandbox_section(paper_text, evaluation, paper_id)
+    # ==========================================================================
+    # SANDBOX EXECUTION SECTION (persisted via session state)
+    # ==========================================================================
+    # Render sandbox section if we have analyzed a paper
+    if 'paper_evaluation' in st.session_state and 'paper_text' in st.session_state:
+        st.markdown("---")
+        render_sandbox_section(
+            st.session_state['paper_text'],
+            st.session_state['paper_evaluation'],
+            st.session_state['paper_id']
+        )
 
 
 def extract_code_blocks_from_text(text: str) -> list:
@@ -668,15 +674,81 @@ def render_sandbox_section(paper_text: str, evaluation: dict, paper_id: str):
     col1, col2 = st.columns([1, 1])
 
     with col1:
-        if st.button("🔍 Extract Code from Paper", type="secondary", use_container_width=True):
-            with st.spinner("Extracting code blocks from paper..."):
-                code_blocks = extract_code_blocks_from_text(paper_text)
-                st.session_state.sandbox_code_blocks = code_blocks
+        if st.button("🔍 Extract Code from Paper", type="secondary", use_container_width=True, key="extract_code_btn"):
+            try:
+                all_code_blocks = []
 
-                if code_blocks:
-                    st.success(f"✅ Found {len(code_blocks)} code block(s)")
+                # Extract inline code blocks from paper text
+                with st.spinner("Extracting code blocks from paper..."):
+                    try:
+                        code_blocks = extract_code_blocks_from_text(paper_text)
+                        all_code_blocks.extend(code_blocks)
+
+                        if code_blocks:
+                            st.success(f"✅ Found {len(code_blocks)} inline code block(s)")
+                        else:
+                            st.info("ℹ️ No inline code blocks found")
+                    except Exception as e:
+                        st.error(f"❌ Error extracting inline code: {str(e)}")
+                        import traceback
+                        st.code(traceback.format_exc())
+
+                # Extract GitHub URLs and clone repos
+                with st.spinner("Searching for GitHub repositories..."):
+                    try:
+                        extractor = CodeExtractor()
+                        github_urls = extractor._extract_github_urls(paper_text)
+
+                        if github_urls:
+                            st.info(f"🔗 Found {len(github_urls)} GitHub repo(s): {', '.join(github_urls)}")
+
+                            # Clone and extract code from each repo
+                            for repo_url in github_urls:
+                                with st.spinner(f"Cloning {repo_url}..."):
+                                    try:
+                                        # Run async code extraction
+                                        loop = asyncio.new_event_loop()
+                                        asyncio.set_event_loop(loop)
+                                        try:
+                                            github_blocks = loop.run_until_complete(
+                                                extractor.extract_from_github(repo_url)
+                                            )
+                                            if github_blocks:
+                                                all_code_blocks.extend([
+                                                    {
+                                                        'language': block.language,
+                                                        'code': block.code,
+                                                        'source': f'github: {repo_url}'
+                                                    }
+                                                    for block in github_blocks
+                                                ])
+                                                st.success(f"✅ Extracted {len(github_blocks)} file(s) from {repo_url}")
+                                            else:
+                                                st.info(f"ℹ️ No Python files found in {repo_url}")
+                                        finally:
+                                            loop.close()
+                                    except Exception as e:
+                                        st.warning(f"⚠️ Failed to clone {repo_url}: {str(e)}")
+                        else:
+                            st.info("ℹ️ No GitHub repositories found in paper")
+
+                    except Exception as e:
+                        st.error(f"❌ Error during GitHub extraction: {str(e)}")
+                        import traceback
+                        st.code(traceback.format_exc())
+
+                # Store all extracted code blocks
+                st.session_state.sandbox_code_blocks = all_code_blocks
+
+                if all_code_blocks:
+                    st.success(f"🎉 Total: {len(all_code_blocks)} code block(s) extracted and ready to run!")
                 else:
-                    st.info("No executable code blocks found in the paper text.")
+                    st.warning("⚠️ No executable code blocks found in the paper text.")
+
+            except Exception as e:
+                st.error(f"❌ Critical error during code extraction: {str(e)}")
+                import traceback
+                st.code(traceback.format_exc())
 
     with col2:
         # Framework detection from ML adoption analysis
@@ -688,16 +760,26 @@ def render_sandbox_section(paper_text: str, evaluation: dict, paper_id: str):
         else:
             st.info("🔧 No specific ML frameworks detected")
 
+    # Debug info
+    with st.expander("🐛 Debug Info", expanded=False):
+        st.write(f"Code blocks in session state: {len(st.session_state.sandbox_code_blocks)}")
+        st.write(f"Paper text length: {len(paper_text)} chars")
+        if st.session_state.sandbox_code_blocks:
+            st.write("First block preview:")
+            st.json(st.session_state.sandbox_code_blocks[0])
+
     # Display extracted code blocks
     if st.session_state.sandbox_code_blocks:
         st.markdown("### 📦 Extracted Code Blocks")
 
         for i, block in enumerate(st.session_state.sandbox_code_blocks):
-            with st.expander(f"Code Block {i + 1} ({block.get('language', 'unknown')})", expanded=(i == 0)):
+            source = block.get('source', 'unknown')
+            with st.expander(f"Code Block {i + 1} - {source} ({block.get('language', 'unknown')})", expanded=(i == 0)):
                 st.code(block.get('code', ''), language=block.get('language', 'python'))
 
                 if st.button(f"▶️ Run Block {i + 1}", key=f"run_block_{i}"):
                     st.session_state.sandbox_selected_code = block.get('code', '')
+                    st.rerun()
 
     # Custom code editor
     st.markdown("### ✏️ Code Editor")
