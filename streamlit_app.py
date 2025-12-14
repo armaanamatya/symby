@@ -22,7 +22,21 @@ except ImportError:
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / 'src' / 'data'))
+sys.path.insert(0, str(Path(__file__).parent / 'src'))
 from paper_evaluator import PaperEvaluator
+
+# Standard imports (always available)
+import re as regex_module
+import asyncio
+
+# PCE imports for sandbox execution
+try:
+    from pce.sandbox_runner import SandboxRunner, ExecutionResult
+    from pce.code_extractor import CodeExtractor, CodeManifest, CodeBlock
+    SANDBOX_SUPPORT = True
+except ImportError as e:
+    SANDBOX_SUPPORT = False
+    print(f"Sandbox support not available: {e}")
 
 
 # Page config
@@ -513,6 +527,286 @@ def render_paper_upload():
             # Full evaluation
             with st.expander("📋 View Full Evaluation JSON"):
                 st.json(evaluation)
+
+            # Store evaluation and paper text in session state for sandbox
+            st.session_state['paper_evaluation'] = evaluation
+            st.session_state['paper_text'] = paper_text
+            st.session_state['paper_id'] = paper_id
+
+            # ==========================================================================
+            # SANDBOX EXECUTION SECTION
+            # ==========================================================================
+            st.markdown("---")
+            render_sandbox_section(paper_text, evaluation, paper_id)
+
+
+def extract_code_blocks_from_text(text: str) -> list:
+    """Extract code blocks from paper text using regex patterns."""
+    code_blocks = []
+
+    # Pattern 1: Markdown code blocks with language
+    pattern1 = regex_module.compile(r'```(\w+)?\s*(.*?)```', regex_module.DOTALL)
+    for match in pattern1.finditer(text):
+        lang = match.group(1) or 'python'
+        code = match.group(2).strip()
+        if code and len(code) > 20:  # Filter out very short snippets
+            code_blocks.append({
+                'language': lang.lower(),
+                'code': code,
+                'source': 'paper'
+            })
+
+    # Pattern 2: Indented code blocks (4+ spaces)
+    lines = text.split('\n')
+    current_block = []
+    in_code_block = False
+
+    for line in lines:
+        if line.startswith('    ') or line.startswith('\t'):
+            current_block.append(line.strip())
+            in_code_block = True
+        else:
+            if in_code_block and current_block:
+                code = '\n'.join(current_block)
+                # Check if it looks like code (has common programming constructs)
+                if any(kw in code for kw in ['import ', 'def ', 'class ', 'for ', 'if ', '= ', '(', ')']):
+                    if len(code) > 50:
+                        code_blocks.append({
+                            'language': 'python',
+                            'code': code,
+                            'source': 'paper'
+                        })
+                current_block = []
+                in_code_block = False
+
+    # Pattern 3: Algorithm/pseudocode blocks
+    algo_pattern = regex_module.compile(
+        r'(?:Algorithm|Procedure|Function|Code)[:\s]*\d*\s*[\n\r]+(.*?)(?=\n\n|\Z)',
+        regex_module.DOTALL | regex_module.IGNORECASE
+    )
+    for match in algo_pattern.finditer(text):
+        code = match.group(1).strip()
+        if code and len(code) > 30:
+            code_blocks.append({
+                'language': 'python',
+                'code': code,
+                'source': 'paper'
+            })
+
+    return code_blocks[:10]  # Limit to 10 blocks
+
+
+def run_code_in_sandbox(code: str, timeout: int = 60) -> dict:
+    """Execute code in a sandbox container."""
+    if not SANDBOX_SUPPORT:
+        return {
+            'status': 'error',
+            'stdout': '',
+            'stderr': 'Sandbox support not available. Please install docker and pce dependencies.',
+            'execution_time_seconds': 0,
+            'memory_peak_mb': 0
+        }
+
+    try:
+        runner = SandboxRunner()
+
+        # Run the code synchronously
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(
+                runner.run(code, timeout_seconds=timeout)
+            )
+            return {
+                'status': result.status,
+                'stdout': result.stdout,
+                'stderr': result.stderr,
+                'exit_code': result.exit_code,
+                'execution_time_seconds': result.execution_time_seconds,
+                'memory_peak_mb': result.memory_peak_mb,
+                'gpu_utilization_pct': result.gpu_utilization_pct,
+                'gpu_memory_used_mb': result.gpu_memory_used_mb
+            }
+        finally:
+            loop.close()
+    except Exception as e:
+        return {
+            'status': 'error',
+            'stdout': '',
+            'stderr': str(e),
+            'execution_time_seconds': 0,
+            'memory_peak_mb': 0
+        }
+
+
+def render_sandbox_section(paper_text: str, evaluation: dict, paper_id: str):
+    """Render the sandbox execution section after paper analysis."""
+    st.subheader("🚀 Code Sandbox")
+
+    if not SANDBOX_SUPPORT:
+        st.warning("⚠️ Docker sandbox not available. Code extraction is still available, but execution requires Docker.")
+        sandbox_disabled = True
+    else:
+        sandbox_disabled = False
+
+    st.markdown("""
+    <div class="info-box">
+    <strong>Execute extracted code in an isolated Docker container</strong><br>
+    Extract and run code from the paper to verify results and test reproducibility.
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Initialize session state for sandbox
+    if 'sandbox_code_blocks' not in st.session_state:
+        st.session_state.sandbox_code_blocks = []
+    if 'sandbox_execution_result' not in st.session_state:
+        st.session_state.sandbox_execution_result = None
+    if 'sandbox_selected_code' not in st.session_state:
+        st.session_state.sandbox_selected_code = ""
+
+    # Extract Code Button
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        if st.button("🔍 Extract Code from Paper", type="secondary", use_container_width=True):
+            with st.spinner("Extracting code blocks from paper..."):
+                code_blocks = extract_code_blocks_from_text(paper_text)
+                st.session_state.sandbox_code_blocks = code_blocks
+
+                if code_blocks:
+                    st.success(f"✅ Found {len(code_blocks)} code block(s)")
+                else:
+                    st.info("No executable code blocks found in the paper text.")
+
+    with col2:
+        # Framework detection from ML adoption analysis
+        ml_adoption = evaluation.get('ml_adoption', {})
+        frameworks = ml_adoption.get('ml_frameworks_mentioned', [])
+
+        if frameworks:
+            st.info(f"🔧 Detected frameworks: {', '.join(frameworks)}")
+        else:
+            st.info("🔧 No specific ML frameworks detected")
+
+    # Display extracted code blocks
+    if st.session_state.sandbox_code_blocks:
+        st.markdown("### 📦 Extracted Code Blocks")
+
+        for i, block in enumerate(st.session_state.sandbox_code_blocks):
+            with st.expander(f"Code Block {i + 1} ({block.get('language', 'unknown')})", expanded=(i == 0)):
+                st.code(block.get('code', ''), language=block.get('language', 'python'))
+
+                if st.button(f"▶️ Run Block {i + 1}", key=f"run_block_{i}"):
+                    st.session_state.sandbox_selected_code = block.get('code', '')
+
+    # Custom code editor
+    st.markdown("### ✏️ Code Editor")
+    st.markdown("*Paste or edit code to run in the sandbox:*")
+
+    # Pre-fill with selected code or first extracted block
+    default_code = st.session_state.sandbox_selected_code
+    if not default_code and st.session_state.sandbox_code_blocks:
+        default_code = st.session_state.sandbox_code_blocks[0].get('code', '')
+
+    custom_code = st.text_area(
+        "Code to execute:",
+        value=default_code,
+        height=300,
+        placeholder="# Paste Python code here to run in sandbox\nimport numpy as np\nprint('Hello from sandbox!')"
+    )
+
+    # Execution options
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        timeout = st.number_input(
+            "Timeout (seconds)",
+            min_value=10,
+            max_value=600,
+            value=60,
+            help="Maximum execution time"
+        )
+
+    with col2:
+        env_option = st.selectbox(
+            "Environment",
+            ["PyTorch", "TensorFlow", "JAX", "CPU-only"],
+            help="Select ML framework environment"
+        )
+
+    with col3:
+        st.write("")  # Spacing
+        st.write("")
+        run_btn = st.button(
+            "▶️ Run in Sandbox",
+            type="primary",
+            use_container_width=True,
+            disabled=sandbox_disabled
+        )
+
+    # Execute code
+    if run_btn and custom_code.strip() and not sandbox_disabled:
+        st.session_state.sandbox_execution_result = None
+
+        with st.spinner("🔄 Running code in isolated container..."):
+            result = run_code_in_sandbox(custom_code, timeout=timeout)
+            st.session_state.sandbox_execution_result = result
+
+    # Display execution results
+    if st.session_state.sandbox_execution_result:
+        result = st.session_state.sandbox_execution_result
+
+        st.markdown("### 📊 Execution Results")
+
+        # Status indicator
+        status = result.get('status', 'unknown')
+        if status == 'success':
+            st.success(f"✅ Execution completed successfully!")
+        elif status == 'timeout':
+            st.warning(f"⏱️ Execution timed out after {timeout} seconds")
+        elif status == 'oom':
+            st.error("💾 Out of memory error")
+        else:
+            st.error(f"❌ Execution failed: {status}")
+
+        # Metrics
+        cols = st.columns(4)
+        cols[0].metric("Status", status.capitalize())
+        cols[1].metric("Time", f"{result.get('execution_time_seconds', 0):.2f}s")
+        cols[2].metric("Memory", f"{result.get('memory_peak_mb', 0):.1f} MB")
+
+        gpu_util = result.get('gpu_utilization_pct')
+        if gpu_util is not None:
+            cols[3].metric("GPU", f"{gpu_util:.1f}%")
+        else:
+            cols[3].metric("GPU", "N/A")
+
+        # Output
+        stdout = result.get('stdout', '')
+        stderr = result.get('stderr', '')
+
+        if stdout:
+            st.markdown("**Output (stdout):**")
+            st.code(stdout, language="bash")
+
+        if stderr:
+            with st.expander("⚠️ Errors/Warnings (stderr)", expanded=bool(status != 'success')):
+                st.code(stderr, language="bash")
+
+        # Save results option
+        with st.expander("💾 Export Results"):
+            export_data = {
+                'paper_id': paper_id,
+                'code': custom_code,
+                'execution_result': result,
+                'environment': env_option
+            }
+            st.download_button(
+                "📥 Download Execution Report (JSON)",
+                data=json.dumps(export_data, indent=2),
+                file_name=f"sandbox_result_{paper_id}.json",
+                mime="application/json"
+            )
 
 
 def render_field_analysis():
