@@ -28,3 +28,7 @@ orjson>=3.9.0
 
 # HTTP requests (for Semantic Scholar API)
 requests>=2.31.0
+
+# LLM integrations (for validation agent)
+openai>=1.0.0
+anthropic>=0.18.0
