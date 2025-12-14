@@ -28,3 +28,8 @@ orjson>=3.9.0
 
 # HTTP requests (for Semantic Scholar API)
 requests>=2.31.0
+
+# Code extraction from papers (pce module)
+aiohttp>=3.9.0
+PyMuPDF>=1.23.0
+GitPython>=3.1.40
