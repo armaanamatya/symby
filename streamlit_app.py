@@ -602,26 +602,119 @@ def extract_code_blocks_from_text(text: str) -> list:
     return code_blocks[:10]  # Limit to 10 blocks
 
 
-def run_code_in_sandbox(code: str, timeout: int = 60) -> dict:
-    """Execute code in a sandbox container."""
-    if not SANDBOX_SUPPORT:
+def run_code_in_subprocess(code: str, timeout: int = 60) -> dict:
+    """Execute code in a subprocess (fallback when Docker is not available)."""
+    import subprocess
+    import tempfile
+    import time
+    import os
+    import logging
+
+    start_time = time.time()
+    temp_file = None
+
+    try:
+        # Create a temporary file for the code
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            f.write(code)
+            temp_file = f.name
+
+        # Run the code in a subprocess with timeout
+        # Use sys.executable to get the correct Python interpreter
+        import sys
+        python_exe = sys.executable or 'python3'
+        result = subprocess.run(
+            [python_exe, temp_file],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=tempfile.gettempdir()
+        )
+
+        execution_time = time.time() - start_time
+
+        # Determine status
+        if result.returncode == 0:
+            status = 'success'
+        elif result.returncode == -9:  # SIGKILL (timeout or OOM)
+            status = 'timeout'
+        else:
+            status = 'error'
+
+        return {
+            'status': status,
+            'stdout': result.stdout,
+            'stderr': result.stderr,
+            'exit_code': result.returncode,
+            'execution_time_seconds': execution_time,
+            'memory_peak_mb': 0,  # Can't easily measure in subprocess
+            'gpu_utilization_pct': None,
+            'gpu_memory_used_mb': None
+        }
+
+    except subprocess.TimeoutExpired:
+        return {
+            'status': 'timeout',
+            'stdout': '',
+            'stderr': f'Execution timed out after {timeout} seconds',
+            'exit_code': -1,
+            'execution_time_seconds': timeout,
+            'memory_peak_mb': 0,
+            'gpu_utilization_pct': None,
+            'gpu_memory_used_mb': None
+        }
+    except Exception as e:
         return {
             'status': 'error',
             'stdout': '',
-            'stderr': 'Sandbox support not available. Please install docker and pce dependencies.',
-            'execution_time_seconds': 0,
-            'memory_peak_mb': 0
+            'stderr': str(e),
+            'exit_code': -1,
+            'execution_time_seconds': time.time() - start_time,
+            'memory_peak_mb': 0,
+            'gpu_utilization_pct': None,
+            'gpu_memory_used_mb': None
         }
+    finally:
+        # Clean up temp file if it was created
+        if temp_file is not None:
+            try:
+                os.unlink(temp_file)
+            except Exception as cleanup_error:
+                logging.warning(f"Failed to clean up temp file {temp_file}: {cleanup_error}")
 
-    try:
-        runner = SandboxRunner()
 
-        # Run the code synchronously
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+def run_code_in_sandbox(code: str, timeout: int = 60, image: str = None) -> dict:
+    """Execute code in a sandbox container or subprocess fallback.
+
+    Args:
+        code: Python code to execute
+        timeout: Maximum execution time in seconds
+        image: Docker image to use (optional, defaults to pytorch image)
+    """
+    # Default image for Docker execution
+    if image is None:
+        image = "python:3.10-slim"  # Use a simpler image that's more likely to be available
+
+    # Try Docker-based execution first if available
+    if SANDBOX_SUPPORT:
+        runner = None
+        loop = None
         try:
+            runner = SandboxRunner(
+                max_timeout_seconds=timeout,
+                enable_gpu=False,  # Disable GPU requirement for basic execution
+                require_gpu=False
+            )
+
+            # Run the code synchronously
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             result = loop.run_until_complete(
-                runner.run(code, timeout_seconds=timeout)
+                runner.run(
+                    image=image,
+                    code=code,
+                    gpu_monitor=False
+                )
             )
             return {
                 'status': result.status,
@@ -633,16 +726,18 @@ def run_code_in_sandbox(code: str, timeout: int = 60) -> dict:
                 'gpu_utilization_pct': result.gpu_utilization_pct,
                 'gpu_memory_used_mb': result.gpu_memory_used_mb
             }
+        except Exception as e:
+            # If Docker fails, fall back to subprocess
+            st.warning(f"Docker execution failed ({str(e)[:50]}...), using subprocess fallback")
         finally:
-            loop.close()
-    except Exception as e:
-        return {
-            'status': 'error',
-            'stdout': '',
-            'stderr': str(e),
-            'execution_time_seconds': 0,
-            'memory_peak_mb': 0
-        }
+            # Clean up resources
+            if loop is not None:
+                loop.close()
+            if runner is not None:
+                runner.close()
+
+    # Fallback to subprocess execution (less isolated but functional)
+    return run_code_in_subprocess(code, timeout)
 
 
 def extract_code_from_arxiv(arxiv_id: str) -> dict:
@@ -724,16 +819,14 @@ def render_sandbox_section(paper_text: str, evaluation: dict, paper_id: str):
     """Render the sandbox execution section after paper analysis."""
     st.subheader("🚀 Code Sandbox")
 
+    # Check and display execution mode
     if not SANDBOX_SUPPORT:
-        st.warning("⚠️ Docker sandbox not available. Code extraction is still available, but execution requires Docker.")
-        sandbox_disabled = True
-    else:
-        sandbox_disabled = False
+        st.info("ℹ️ Running in subprocess mode (Docker not available). Code will be executed directly in Python.")
 
     st.markdown("""
     <div class="info-box">
-    <strong>Execute extracted code in an isolated Docker container</strong><br>
-    Extract and run code from the paper to verify results and test reproducibility.
+    <strong>Execute extracted code to test research reproducibility</strong><br>
+    Extract and run code from the paper to verify results.
     </div>
     """, unsafe_allow_html=True)
 
@@ -924,17 +1017,16 @@ def render_sandbox_section(paper_text: str, evaluation: dict, paper_id: str):
         st.write("")  # Spacing
         st.write("")
         run_btn = st.button(
-            "▶️ Run in Sandbox",
+            "▶️ Run Code",
             type="primary",
-            use_container_width=True,
-            disabled=sandbox_disabled
+            use_container_width=True
         )
 
     # Execute code
-    if run_btn and custom_code.strip() and not sandbox_disabled:
+    if run_btn and custom_code.strip():
         st.session_state.sandbox_execution_result = None
 
-        with st.spinner("🔄 Running code in isolated container..."):
+        with st.spinner("🔄 Executing code..."):
             result = run_code_in_sandbox(custom_code, timeout=timeout)
             st.session_state.sandbox_execution_result = result
 
