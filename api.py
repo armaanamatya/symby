@@ -11,13 +11,17 @@ REST API for Next.js integration - serves all 4 objectives:
 Run: uvicorn api:app --host 0.0.0.0 --port 8000 --reload
 """
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from typing import Optional, List
-from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field
+from enum import Enum
+from datetime import datetime
 import sys
 import os
+import uuid
+import asyncio
 from pathlib import Path
 
 # Add src to path
@@ -123,6 +127,237 @@ class SummaryResponse(BaseModel):
 
 
 # =============================================================================
+# PAPER CODE EXECUTOR (PCE) MODELS
+# =============================================================================
+
+class JobStatus(str, Enum):
+    """Status enum for PCE jobs"""
+    PROCESSING = "processing"
+    COMPLETE = "complete"
+    ERROR = "error"
+    QUEUED = "queued"
+    RUNNING = "running"
+    TIMEOUT = "timeout"
+
+
+class Environment(str, Enum):
+    """Supported execution environments"""
+    PYTORCH = "pytorch"
+    TENSORFLOW = "tensorflow"
+    JAX = "jax"
+
+
+class CodeBlock(BaseModel):
+    """Individual code block extracted from paper"""
+    language: str = "python"
+    code: str
+    description: Optional[str] = None
+    line_start: Optional[int] = None
+    dependencies: List[str] = Field(default_factory=list)
+
+
+class CodeManifest(BaseModel):
+    """Complete code manifest extracted from a paper"""
+    id: str
+    paper_id: str
+    title: Optional[str] = None
+    extracted_at: datetime
+    code_blocks: List[CodeBlock] = Field(default_factory=list)
+    main_algorithm: Optional[str] = None
+    dependencies: List[str] = Field(default_factory=list)
+    estimated_runtime_seconds: Optional[int] = None
+    hardware_requirements: Optional[Dict[str, Any]] = None
+
+
+class ExecutionResult(BaseModel):
+    """Result of code execution"""
+    success: bool
+    stdout: Optional[str] = None
+    stderr: Optional[str] = None
+    execution_time_seconds: float
+    memory_usage_mb: Optional[float] = None
+    gpu_usage_percent: Optional[float] = None
+    output_artifacts: List[str] = Field(default_factory=list)
+
+
+class ValidationResult(BaseModel):
+    """Result of validating execution against paper claims"""
+    paper_id: str
+    execution_job_id: str
+    validated_at: datetime
+    claims_verified: int
+    claims_failed: int
+    claims_total: int
+    verification_rate: float
+    details: List[Dict[str, Any]] = Field(default_factory=list)
+    overall_status: str  # "verified", "partially_verified", "failed"
+
+
+# PCE Request/Response Models
+class ExtractRequest(BaseModel):
+    """Request to extract code from a paper"""
+    paper_id: str = Field(..., description="Paper ID (e.g., 'arxiv:2010.11929')")
+
+
+class ExtractResponse(BaseModel):
+    """Response for code extraction request"""
+    job_id: str
+    status: str
+    code_manifest: Optional[CodeManifest] = None
+
+
+class ExtractJobResponse(BaseModel):
+    """Response for extraction job status"""
+    status: str
+    code_manifest: Optional[CodeManifest] = None
+    error: Optional[str] = None
+
+
+class ExecuteRequest(BaseModel):
+    """Request to execute code from a manifest"""
+    code_manifest_id: str
+    environment: Environment = Environment.PYTORCH
+    timeout_seconds: int = Field(default=300, ge=10, le=3600)
+
+
+class ExecuteResponse(BaseModel):
+    """Response for code execution request"""
+    job_id: str
+    status: str
+
+
+class ExecuteJobResponse(BaseModel):
+    """Response for execution job status"""
+    status: str
+    result: Optional[ExecutionResult] = None
+    error: Optional[str] = None
+
+
+class ValidateRequest(BaseModel):
+    """Request to validate execution against paper claims"""
+    paper_id: str
+    execution_job_id: str
+
+
+class ValidateResponse(BaseModel):
+    """Response for validation request"""
+    validation_result: ValidationResult
+
+
+class PCEStatusResponse(BaseModel):
+    """Response for PCE system status"""
+    active_jobs: int
+    completed_today: int
+    gpu_utilization: float
+
+
+# =============================================================================
+# PCE JOB STORE (In-memory, use Redis in production)
+# =============================================================================
+
+_pce_jobs: Dict[str, Dict[str, Any]] = {}
+_pce_manifests: Dict[str, CodeManifest] = {}
+_pce_execution_results: Dict[str, ExecutionResult] = {}
+_pce_stats = {
+    "completed_today": 0,
+    "last_reset": datetime.utcnow().date()
+}
+
+
+def _reset_daily_stats():
+    """Reset daily stats if it's a new day"""
+    today = datetime.utcnow().date()
+    if _pce_stats["last_reset"] != today:
+        _pce_stats["completed_today"] = 0
+        _pce_stats["last_reset"] = today
+
+
+# =============================================================================
+# PCE BACKGROUND TASKS
+# =============================================================================
+
+async def run_extraction(job_id: str, paper_id: str):
+    """Background task to extract code from a paper"""
+    try:
+        # Simulate extraction process (replace with actual implementation)
+        await asyncio.sleep(2)  # Simulated processing time
+
+        # Create a sample manifest (in production, use actual extraction logic)
+        manifest = CodeManifest(
+            id=str(uuid.uuid4()),
+            paper_id=paper_id,
+            title=f"Extracted code from {paper_id}",
+            extracted_at=datetime.utcnow(),
+            code_blocks=[
+                CodeBlock(
+                    language="python",
+                    code="# Placeholder: Actual extraction would parse the paper",
+                    description="Main algorithm implementation",
+                    dependencies=["torch", "numpy"]
+                )
+            ],
+            dependencies=["torch>=1.9.0", "numpy>=1.20.0"],
+            estimated_runtime_seconds=60
+        )
+
+        _pce_manifests[manifest.id] = manifest
+        _pce_jobs[job_id] = {
+            "status": JobStatus.COMPLETE,
+            "result": manifest,
+            "error": None
+        }
+
+    except Exception as e:
+        _pce_jobs[job_id] = {
+            "status": JobStatus.ERROR,
+            "result": None,
+            "error": str(e)
+        }
+
+
+async def run_execution(job_id: str, manifest_id: str, environment: str, timeout: int):
+    """Background task to execute code from a manifest"""
+    try:
+        _pce_jobs[job_id]["status"] = JobStatus.RUNNING
+
+        # Simulate execution (replace with actual Docker/sandbox execution)
+        await asyncio.sleep(3)  # Simulated execution time
+
+        result = ExecutionResult(
+            success=True,
+            stdout="Execution completed successfully.\nModel accuracy: 0.95",
+            stderr=None,
+            execution_time_seconds=2.5,
+            memory_usage_mb=512.0,
+            gpu_usage_percent=75.0,
+            output_artifacts=["model_weights.pt", "results.json"]
+        )
+
+        _pce_execution_results[job_id] = result
+        _pce_jobs[job_id] = {
+            "status": JobStatus.COMPLETE,
+            "result": result,
+            "error": None
+        }
+
+        _reset_daily_stats()
+        _pce_stats["completed_today"] += 1
+
+    except asyncio.TimeoutError:
+        _pce_jobs[job_id] = {
+            "status": JobStatus.TIMEOUT,
+            "result": None,
+            "error": f"Execution timed out after {timeout} seconds"
+        }
+    except Exception as e:
+        _pce_jobs[job_id] = {
+            "status": JobStatus.ERROR,
+            "result": None,
+            "error": str(e)
+        }
+
+
+# =============================================================================
 # API ROUTES
 # =============================================================================
 
@@ -145,7 +380,13 @@ async def root():
             "quality": "GET /api/objectives/quality",
             "discovery": "GET /api/objectives/discovery",
             "field_detail": "GET /api/field/{field_name}",
-            "dashboard": "GET /api/dashboard"
+            "dashboard": "GET /api/dashboard",
+            "pce_extract": "POST /api/pce/extract",
+            "pce_extract_status": "GET /api/pce/extract/{job_id}",
+            "pce_execute": "POST /api/pce/execute",
+            "pce_execute_status": "GET /api/pce/execute/{job_id}",
+            "pce_validate": "POST /api/pce/validate",
+            "pce_status": "GET /api/pce/status"
         }
     }
 
@@ -467,6 +708,260 @@ async def get_field_classification():
     return {
         "classification": data["classification"]
     }
+
+
+# =============================================================================
+# PAPER CODE EXECUTOR (PCE) ENDPOINTS
+# =============================================================================
+
+@app.post("/api/pce/extract", response_model=ExtractResponse, tags=["Paper Code Executor"])
+async def extract_code(
+    request: ExtractRequest,
+    background_tasks: BackgroundTasks
+) -> ExtractResponse:
+    """
+    Extract code from a paper.
+
+    Initiates an async extraction job that parses the paper and extracts
+    code blocks, algorithms, and dependencies.
+
+    **Supported paper_id formats:**
+    - arxiv:2010.11929
+    - doi:10.1234/example
+    - s2:123456789
+
+    Returns a job_id to poll for results.
+    """
+    job_id = str(uuid.uuid4())
+    _pce_jobs[job_id] = {
+        "status": JobStatus.PROCESSING,
+        "result": None,
+        "error": None,
+        "type": "extraction",
+        "paper_id": request.paper_id,
+        "created_at": datetime.utcnow()
+    }
+
+    background_tasks.add_task(run_extraction, job_id, request.paper_id)
+
+    return ExtractResponse(
+        job_id=job_id,
+        status=JobStatus.PROCESSING.value,
+        code_manifest=None
+    )
+
+
+@app.get("/api/pce/extract/{job_id}", response_model=ExtractJobResponse, tags=["Paper Code Executor"])
+async def get_extraction_status(job_id: str) -> ExtractJobResponse:
+    """
+    Get the status of a code extraction job.
+
+    Poll this endpoint to check if extraction is complete.
+    Once status is 'complete', the code_manifest will contain the extracted code.
+    """
+    if job_id not in _pce_jobs:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+
+    job = _pce_jobs[job_id]
+
+    if job.get("type") != "extraction":
+        raise HTTPException(status_code=400, detail=f"Job '{job_id}' is not an extraction job")
+
+    code_manifest = None
+    if job["status"] == JobStatus.COMPLETE and job.get("result"):
+        code_manifest = job["result"]
+
+    return ExtractJobResponse(
+        status=job["status"].value if isinstance(job["status"], JobStatus) else job["status"],
+        code_manifest=code_manifest,
+        error=job.get("error")
+    )
+
+
+@app.post("/api/pce/execute", response_model=ExecuteResponse, tags=["Paper Code Executor"])
+async def execute_code(
+    request: ExecuteRequest,
+    background_tasks: BackgroundTasks
+) -> ExecuteResponse:
+    """
+    Execute code from a code manifest.
+
+    Runs the extracted code in a sandboxed environment with the specified
+    ML framework (PyTorch, TensorFlow, or JAX).
+
+    **Parameters:**
+    - code_manifest_id: ID from a completed extraction job
+    - environment: ML framework to use (pytorch, tensorflow, jax)
+    - timeout_seconds: Max execution time (10-3600 seconds)
+
+    Returns a job_id to poll for execution results.
+    """
+    if request.code_manifest_id not in _pce_manifests:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Code manifest '{request.code_manifest_id}' not found. "
+                   "Ensure extraction is complete first."
+        )
+
+    job_id = str(uuid.uuid4())
+    _pce_jobs[job_id] = {
+        "status": JobStatus.QUEUED,
+        "result": None,
+        "error": None,
+        "type": "execution",
+        "manifest_id": request.code_manifest_id,
+        "environment": request.environment.value,
+        "timeout": request.timeout_seconds,
+        "created_at": datetime.utcnow()
+    }
+
+    background_tasks.add_task(
+        run_execution,
+        job_id,
+        request.code_manifest_id,
+        request.environment.value,
+        request.timeout_seconds
+    )
+
+    return ExecuteResponse(
+        job_id=job_id,
+        status=JobStatus.QUEUED.value
+    )
+
+
+@app.get("/api/pce/execute/{job_id}", response_model=ExecuteJobResponse, tags=["Paper Code Executor"])
+async def get_execution_status(job_id: str) -> ExecuteJobResponse:
+    """
+    Get the status of a code execution job.
+
+    Poll this endpoint to check if execution is complete.
+
+    **Possible statuses:**
+    - queued: Waiting to start
+    - running: Currently executing
+    - complete: Finished successfully
+    - error: Failed with an error
+    - timeout: Exceeded time limit
+    """
+    if job_id not in _pce_jobs:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+
+    job = _pce_jobs[job_id]
+
+    if job.get("type") != "execution":
+        raise HTTPException(status_code=400, detail=f"Job '{job_id}' is not an execution job")
+
+    result = None
+    if job["status"] == JobStatus.COMPLETE and job.get("result"):
+        result = job["result"]
+
+    return ExecuteJobResponse(
+        status=job["status"].value if isinstance(job["status"], JobStatus) else job["status"],
+        result=result,
+        error=job.get("error")
+    )
+
+
+@app.post("/api/pce/validate", response_model=ValidateResponse, tags=["Paper Code Executor"])
+async def validate_execution(request: ValidateRequest) -> ValidateResponse:
+    """
+    Validate execution results against paper claims.
+
+    Compares the execution output with claims made in the paper
+    (e.g., accuracy metrics, performance benchmarks).
+
+    **Parameters:**
+    - paper_id: The paper ID used for extraction
+    - execution_job_id: Job ID from a completed execution
+
+    Returns a validation result with verification statistics.
+    """
+    if request.execution_job_id not in _pce_jobs:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Execution job '{request.execution_job_id}' not found"
+        )
+
+    job = _pce_jobs[request.execution_job_id]
+
+    if job.get("type") != "execution":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job '{request.execution_job_id}' is not an execution job"
+        )
+
+    if job["status"] != JobStatus.COMPLETE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Execution job is not complete (status: {job['status']})"
+        )
+
+    # Perform validation (simulated - replace with actual validation logic)
+    # In production, this would compare execution outputs with paper claims
+    claims_total = 5
+    claims_verified = 4
+    claims_failed = 1
+
+    verification_rate = claims_verified / claims_total if claims_total > 0 else 0.0
+
+    if verification_rate >= 0.9:
+        overall_status = "verified"
+    elif verification_rate >= 0.5:
+        overall_status = "partially_verified"
+    else:
+        overall_status = "failed"
+
+    validation_result = ValidationResult(
+        paper_id=request.paper_id,
+        execution_job_id=request.execution_job_id,
+        validated_at=datetime.utcnow(),
+        claims_verified=claims_verified,
+        claims_failed=claims_failed,
+        claims_total=claims_total,
+        verification_rate=verification_rate,
+        details=[
+            {"claim": "Model accuracy >= 0.95", "verified": True, "actual": 0.95},
+            {"claim": "Training time < 1 hour", "verified": True, "actual": "45 minutes"},
+            {"claim": "GPU memory < 8GB", "verified": True, "actual": "6.5GB"},
+            {"claim": "Convergence in 100 epochs", "verified": True, "actual": 98},
+            {"claim": "FLOPs < 10B", "verified": False, "actual": "12B"}
+        ],
+        overall_status=overall_status
+    )
+
+    return ValidateResponse(validation_result=validation_result)
+
+
+@app.get("/api/pce/status", response_model=PCEStatusResponse, tags=["Paper Code Executor"])
+async def get_pce_status() -> PCEStatusResponse:
+    """
+    Get Paper Code Executor system status.
+
+    Returns metrics about the PCE system including:
+    - active_jobs: Number of currently running jobs
+    - completed_today: Jobs completed in the last 24 hours
+    - gpu_utilization: Current GPU usage percentage (0.0-1.0)
+    """
+    _reset_daily_stats()
+
+    # Count active jobs (processing, queued, or running)
+    active_statuses = {JobStatus.PROCESSING, JobStatus.QUEUED, JobStatus.RUNNING}
+    active_jobs = sum(
+        1 for job in _pce_jobs.values()
+        if job.get("status") in active_statuses
+    )
+
+    # Simulated GPU utilization (replace with actual monitoring)
+    # In production, query nvidia-smi or use pynvml
+    gpu_utilization = 0.0
+    if active_jobs > 0:
+        gpu_utilization = min(0.25 * active_jobs, 1.0)
+
+    return PCEStatusResponse(
+        active_jobs=active_jobs,
+        completed_today=_pce_stats["completed_today"],
+        gpu_utilization=gpu_utilization
+    )
 
 
 # =============================================================================
