@@ -1,0 +1,91 @@
+# Symby Research Crew Configuration
+# This file configures agent behaviors and tool settings
+
+agents:
+  paper_analyst:
+    role: "Paper Analyst"
+    goal: "Extract key information from research papers"
+    max_iterations: 5
+    allow_delegation: true
+    
+  literature_researcher:
+    role: "Literature Researcher"  
+    goal: "Research academic context and related work"
+    max_iterations: 10
+    allow_delegation: true
+    
+  code_hunter:
+    role: "Code Hunter"
+    goal: "Find code implementations of papers"
+    max_iterations: 8
+    allow_delegation: true
+    
+  code_verifier:
+    role: "Code Verifier"
+    goal: "Verify code matches paper claims"
+    max_iterations: 6
+    allow_delegation: true
+    
+  synthesizer:
+    role: "Research Synthesizer"
+    goal: "Create comprehensive research reports"
+    max_iterations: 3
+    allow_delegation: false
+
+tools:
+  arxiv:
+    max_results_per_search: 15
+    sort_by: "relevance"
+    
+  github:
+    max_results_per_search: 10
+    sort_by: "stars"
+    include_forks: false
+    
+  wikipedia:
+    language: "en"
+    sentences_per_summary: 5
+    
+  pdf:
+    max_section_length: 4000
+    extract_references: true
+
+crew:
+  process: "sequential"  # or "hierarchical"
+  verbose: true
+  memory: true
+  max_rpm: 10
+  
+  # Output settings
+  output:
+    format: "markdown"
+    include_timestamps: true
+    save_intermediate: false
+    
+  # Execution settings
+  execution:
+    timeout_per_task: 300  # seconds
+    retry_on_failure: true
+    max_retries: 2
+
+# Model presets (override with --model and --provider flags)
+model_presets:
+  default:
+    provider: "openai"
+    model: "gpt-4o"
+    temperature: 0.1
+    
+  fast:
+    provider: "openai"
+    model: "gpt-4o-mini"
+    temperature: 0.1
+    
+  local:
+    provider: "ollama"
+    model: "llama3.1:8b"
+    temperature: 0.1
+    
+  claude:
+    provider: "anthropic"
+    model: "claude-sonnet-4-20250514"
+    temperature: 0.1
