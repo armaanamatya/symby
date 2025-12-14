@@ -513,50 +513,89 @@ class PaperAnalyzer:
         if not self.client:
             return {}
 
-        prompt = f"""Analyze this research paper and extract structured information.
+        system_prompt = """You are SymbyAI's expert research paper analyst. Your role is to perform comprehensive, rigorous analysis of scientific papers to extract actionable insights.
 
-PAPER TEXT (first 4000 chars):
+ANALYSIS PRINCIPLES:
+1. ACCURACY: Extract only information explicitly stated in the paper. Never infer or assume.
+2. COMPLETENESS: Identify ALL relevant ML frameworks, methods, datasets, and metrics mentioned.
+3. EVIDENCE-BASED: Every assessment must be grounded in specific paper content.
+4. CRITICAL EVALUATION: Objectively assess reproducibility and methodology quality.
+
+OUTPUT FORMAT: Return valid JSON only. No explanations or markdown."""
+
+        prompt = f"""Analyze this research paper comprehensively.
+
+=== PAPER CONTENT ===
 {text[:4000]}
 
-Provide a JSON response with the following structure:
+=== REQUIRED ANALYSIS ===
+
+Extract and return a JSON object with this exact structure:
+
 {{
-    "field": "detected scientific field",
+    "field": "<primary scientific field: e.g., Biology, Medicine, Computer Science, Physics, Chemistry>",
+    "subfield": "<specific subfield: e.g., Protein Structure Prediction, Natural Language Processing>",
+
     "ml_adoption": {{
-        "ml_frameworks_mentioned": ["list of ML frameworks"],
-        "specific_models_architectures": ["list of models/architectures"],
-        "compute_resources_mentioned": ["GPU, TPU, etc."],
-        "ml_libraries_tools": ["list of tools"],
-        "ml_adoption_level": "none|minimal|moderate|extensive",
-        "ml_method_primary": "primary ML method or null",
-        "integration_with_traditional_methods": true/false
+        "ml_frameworks_mentioned": ["<exact framework names found: PyTorch, TensorFlow, JAX, etc.>"],
+        "specific_models_architectures": ["<model names: BERT, GPT, ResNet, Transformer, etc.>"],
+        "compute_resources_mentioned": ["<hardware: GPU types, TPU, cloud services>"],
+        "ml_libraries_tools": ["<tools: HuggingFace, WandB, MLflow, etc.>"],
+        "ml_adoption_level": "<none|minimal|moderate|extensive>",
+        "ml_method_primary": "<main ML approach used, or null if none>",
+        "integration_with_traditional_methods": <true if ML combined with classical methods, else false>,
+        "training_details_provided": <true if epochs, batch size, learning rate mentioned>
     }},
+
     "reproducibility": {{
-        "code_availability_mentioned": true/false,
-        "code_repository_type": "github|gitlab|zenodo|null",
-        "data_availability_mentioned": true/false,
-        "methodology_detail_level": "sparse|basic|moderate|detailed",
-        "hyperparameters_specified": true/false,
-        "replication_feasibility": "not_feasible|difficult|moderate|feasible|highly_feasible"
+        "code_availability_mentioned": <true if code/repository mentioned>,
+        "code_repository_type": "<github|gitlab|zenodo|huggingface|null>",
+        "code_url": "<exact URL if found, else null>",
+        "data_availability_mentioned": <true if data sharing mentioned>,
+        "dataset_names": ["<specific dataset names mentioned>"],
+        "methodology_detail_level": "<sparse|basic|moderate|detailed>",
+        "hyperparameters_specified": <true if specific hyperparameters given>,
+        "computational_environment_described": <true if hardware/software environment detailed>,
+        "preprocessing_steps_detailed": <true if data preprocessing explained>,
+        "statistical_methods_described": <true if statistical tests/validation described>,
+        "replication_feasibility": "<not_feasible|difficult|moderate|feasible|highly_feasible>"
     }},
+
     "research_outcomes": {{
-        "validation_type": ["list of validation types"],
-        "real_world_application_mentioned": true/false,
-        "commercialization_mentioned": true/false
+        "validation_type": ["<types: cross-validation, ablation, benchmark, clinical, etc.>"],
+        "benchmark_datasets": ["<benchmark names used for evaluation>"],
+        "baseline_comparisons": ["<methods/models compared against>"],
+        "key_metrics_reported": ["<metrics: accuracy, F1, BLEU, RMSE, etc.>"],
+        "quantitative_results": ["<key numerical results, e.g., '95.2% accuracy on ImageNet'>"],
+        "real_world_application_mentioned": <true if practical applications discussed>,
+        "commercialization_mentioned": <true if commercial applications mentioned>,
+        "limitations_acknowledged": <true if paper discusses limitations>
     }},
+
     "impact_indicators": {{
-        "claims_novelty": true/false,
-        "claims_improvement_over_existing": true/false,
-        "quantitative_improvements_mentioned": true/false,
-        "potential_impact_scope": "narrow|moderate|broad|transformational"
+        "claims_novelty": <true if paper claims novel contribution>,
+        "novelty_type": "<first-of-kind|incremental|methodological|application>",
+        "claims_improvement_over_existing": <true if claims SOTA or improvements>,
+        "quantitative_improvements_mentioned": <true if specific improvement percentages given>,
+        "improvement_details": "<brief description of claimed improvements>",
+        "comparison_to_baseline": <true if systematic comparison provided>,
+        "potential_impact_scope": "<narrow|moderate|broad|transformational>"
     }},
-    "summary": "brief summary of the paper"
-}}"""
+
+    "summary": "<2-3 sentence summary: problem addressed, method used, key results>"
+}}
+
+CRITICAL INSTRUCTIONS:
+- Use exact values from the paper (don't paraphrase metric names or numbers)
+- Set fields to null or empty arrays [] when information is not found
+- Assess reproducibility honestly - most papers have gaps
+- Be conservative with impact assessments"""
 
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are a research paper analysis expert. Provide accurate, structured analysis in JSON format."},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
@@ -689,26 +728,49 @@ Provide a JSON response with the following structure:
                 "error": "NVIDIA API key not configured"
             }
 
-        prompt = f"""Based on the following paper content, answer the question.
+        system_prompt = """You are SymbyAI's research paper Q&A expert. Your role is to answer questions about scientific papers with precision and transparency.
 
-PAPER CONTENT:
+RESPONSE PRINCIPLES:
+1. GROUNDED: Base answers ONLY on the provided paper content. Never use external knowledge.
+2. HONEST: If information is not in the paper, explicitly state "This information is not found in the provided paper content."
+3. PRECISE: Quote relevant passages directly to support your answer.
+4. CALIBRATED: Confidence should reflect how directly the paper addresses the question.
+
+CONFIDENCE SCALE:
+- 0.9-1.0: Answer directly stated in paper with exact quotes available
+- 0.7-0.9: Answer clearly implied with strong supporting evidence
+- 0.5-0.7: Partial answer available, some inference required
+- 0.3-0.5: Limited relevant information, significant uncertainty
+- 0.0-0.3: Question not addressed in paper content"""
+
+        prompt = f"""Answer the following question based ONLY on this paper content.
+
+=== PAPER CONTENT ===
 {text[:6000]}
 
-QUESTION: {question}
+=== QUESTION ===
+{question}
 
-Provide a JSON response with:
+=== REQUIRED RESPONSE FORMAT ===
+Return a JSON object:
 {{
-    "answer": "your detailed answer",
-    "confidence": 0.0-1.0,
-    "relevant_quotes": ["quotes from paper supporting answer"],
-    "reasoning": "brief explanation of your reasoning"
-}}"""
+    "answer": "<comprehensive answer based solely on paper content>",
+    "confidence": <0.0-1.0 score following the confidence scale>,
+    "relevant_quotes": [
+        "<exact quote 1 from paper supporting the answer>",
+        "<exact quote 2 if applicable>"
+    ],
+    "reasoning": "<explain how the quotes support your answer>",
+    "not_found_aspects": "<list any aspects of the question not addressed in the paper, or null if fully answered>"
+}}
+
+IMPORTANT: If the paper does not contain information to answer the question, set confidence to 0.1-0.3 and explain what is missing."""
 
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are a research paper expert. Answer questions accurately based only on the provided paper content. If the answer is not in the paper, say so."},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,

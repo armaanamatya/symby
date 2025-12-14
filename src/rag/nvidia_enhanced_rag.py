@@ -103,28 +103,39 @@ class NVIDIAEnhancedRAG:
             List of KnowledgeTriple objects
         """
 
-        system_prompt = """You are a knowledge graph extraction expert for scientific papers.
+        system_prompt = """You are SymbyAI's knowledge graph extraction specialist. Your task is to extract precise Subject-Predicate-Object triples that capture the essential relationships in scientific papers.
 
-Extract Subject-Predicate-Object triples representing key relationships in the paper.
+EXTRACTION GUIDELINES:
 
-Focus on:
-- ML techniques used
-- Scientific problems addressed
-- Methodological innovations
-- Impact relationships (X accelerated Y, Z enabled W)
+1. ENTITY TYPES TO EXTRACT:
+   - Methods/Algorithms (e.g., "AlphaFold", "BERT", "Gradient Descent")
+   - Technologies/Frameworks (e.g., "PyTorch", "Transformer Architecture")
+   - Scientific Concepts (e.g., "Protein Folding", "Language Modeling")
+   - Datasets (e.g., "ImageNet", "PDB")
+   - Metrics (e.g., "Accuracy", "RMSD")
+   - Applications (e.g., "Drug Discovery", "Machine Translation")
 
-Output JSON array:
-[
-  {
-    "subject": "AlphaFold",
-    "predicate": "uses",
-    "object": "Transformer Architecture",
-    "confidence": 0.95
-  },
-  ...
-]
+2. PREDICATE TYPES TO USE:
+   - Technical: "uses", "implements", "extends", "combines_with", "trained_on"
+   - Comparative: "outperforms", "improves_upon", "compared_to"
+   - Causal: "enables", "accelerates", "solves", "addresses"
+   - Compositional: "consists_of", "part_of", "instance_of"
 
-Extract 5-10 most important triples."""
+3. CONFIDENCE SCORING:
+   - 0.9-1.0: Relationship explicitly stated
+   - 0.7-0.9: Relationship strongly implied
+   - 0.5-0.7: Relationship reasonably inferred
+   - <0.5: Don't include (too speculative)
+
+OUTPUT FORMAT - Return JSON with "triples" array:
+{
+  "triples": [
+    {"subject": "...", "predicate": "...", "object": "...", "confidence": 0.95},
+    ...
+  ]
+}
+
+Extract 5-10 high-confidence triples that capture the paper's core contributions and methodology."""
 
         paper_text = f"""
 Title: {paper.get('title', '')}
@@ -181,27 +192,47 @@ Full Text: {paper.get('text', '')[:3000]}
             for s in sources[:3]
         ])
 
-        eval_prompt = f"""Evaluate this RAG response:
+        eval_prompt = f"""Perform rigorous evaluation of this RAG (Retrieval-Augmented Generation) response.
 
-Query: {query}
+=== USER QUERY ===
+{query}
 
-Answer: {answer}
+=== GENERATED ANSWER ===
+{answer}
 
-Source Documents:
+=== SOURCE DOCUMENTS ===
 {source_text}
 
-Evaluate:
-1. Relevancy: Does the answer address the query?
-2. Hallucination: Does the answer contain claims not supported by sources?
-3. Confidence: Overall quality (0-1)
+=== EVALUATION CRITERIA ===
 
-Output JSON:
+1. RELEVANCY ASSESSMENT:
+   - Does the answer directly address the user's question?
+   - Is the response on-topic and useful?
+   - Are all parts of a multi-part question addressed?
+
+2. HALLUCINATION DETECTION:
+   - Does EVERY factual claim in the answer have support in the sources?
+   - Are there any invented statistics, dates, names, or technical details?
+   - Does the answer make claims that go beyond what sources state?
+   - Check: specific numbers, proper nouns, technical claims
+
+3. QUALITY INDICATORS:
+   - Citation usage: Does answer reference specific papers?
+   - Completeness: Is the answer thorough given available sources?
+   - Accuracy: Are source details correctly represented?
+
+=== REQUIRED OUTPUT ===
+Return JSON:
 {{
-  "is_relevant": true/false,
-  "has_hallucination": true/false,
-  "confidence": 0.85,
-  "reasoning": "explanation"
-}}"""
+  "is_relevant": <true if answer addresses the query, false otherwise>,
+  "has_hallucination": <true if ANY unsupported claims found, false if all claims backed by sources>,
+  "confidence": <0.0-1.0 overall quality score>,
+  "hallucination_examples": ["<specific unsupported claim 1>", "<claim 2>"] or [],
+  "missing_aspects": ["<query aspect not addressed>"] or [],
+  "reasoning": "<2-3 sentence explanation of evaluation>"
+}}
+
+Be strict about hallucination - if uncertain whether a claim is supported, mark has_hallucination as true."""
 
         try:
             response = self.client.chat.completions.create(
@@ -255,14 +286,29 @@ Citations: {s.get('citation_count', 0)}"""
             for s in sources[:10]
         ])
 
-        system_prompt = """You are an expert research assistant analyzing ML's impact on science.
+        system_prompt = """You are SymbyAI's research intelligence assistant, specializing in analyzing ML's transformative impact across scientific disciplines.
 
-CRITICAL RULES:
-1. Base answers ONLY on provided sources
-2. Always cite papers using [Paper ID: xxx] format
-3. Provide quantitative evidence (citation counts, years, metrics)
-4. If sources don't contain the answer, say "Insufficient information in sources"
-5. Never make claims without source support"""
+CORE PRINCIPLES:
+
+1. SOURCE FIDELITY:
+   - Base ALL factual claims on the provided source documents
+   - ALWAYS cite using format: [Paper ID: xxx] or [Title, Year]
+   - If sources don't contain the answer, explicitly state: "The provided sources do not contain sufficient information to answer this question."
+
+2. EVIDENCE STANDARDS:
+   - Include quantitative evidence when available (citation counts, performance metrics, dates)
+   - Distinguish between what papers claim vs. what they demonstrate
+   - Note the recency and relevance of cited evidence
+
+3. ANALYTICAL DEPTH:
+   - Synthesize information across multiple sources when applicable
+   - Identify trends, patterns, and contradictions in the literature
+   - Highlight methodological considerations and limitations
+
+4. RESPONSE QUALITY:
+   - Structure answers clearly with logical flow
+   - Lead with the most relevant and well-supported information
+   - Be concise but comprehensive"""
 
         user_prompt = f"""Context Papers:
 {context}
@@ -396,26 +442,64 @@ Please refine your answer to address the feedback while maintaining citation rig
             downstream_triples.extend(triples)
 
         # Analyze impact propagation
-        analysis_prompt = f"""Analyze how this ML method propagated through scientific literature.
+        analysis_prompt = f"""Analyze the scientific impact propagation of this ML method through citation networks.
 
-SEED PAPER:
-{seed_paper.get('title', '')} ({seed_paper.get('year', '')})
+=== SEED PAPER (Origin) ===
+Title: {seed_paper.get('title', '')}
+Year: {seed_paper.get('year', '')}
 
-KNOWLEDGE EXTRACTED:
-{json.dumps([{'s': t.subject, 'p': t.predicate, 'o': t.object} for t in seed_triples], indent=2)}
+=== EXTRACTED KNOWLEDGE FROM SEED ===
+{json.dumps([{{'subject': t.subject, 'predicate': t.predicate, 'object': t.object}} for t in seed_triples], indent=2)}
 
-DOWNSTREAM PAPERS (citing the seed):
-{len(citing_papers)} papers cite this work
+=== CITATION METRICS ===
+Total citing papers analyzed: {len(citing_papers)}
 
-DOWNSTREAM KNOWLEDGE:
-{json.dumps([{'s': t.subject, 'p': t.predicate, 'o': t.object} for t in downstream_triples[:20]], indent=2)}
+=== KNOWLEDGE FROM DOWNSTREAM (CITING) PAPERS ===
+{json.dumps([{{'subject': t.subject, 'predicate': t.predicate, 'object': t.object}} for t in downstream_triples[:20]], indent=2)}
 
-Analyze:
-1. How did the ML method spread across disciplines?
-2. What new applications emerged?
-3. What's the impact factor (incremental/transformational/revolutionary)?
+=== ANALYSIS REQUIRED ===
 
-Output JSON."""
+Provide a comprehensive impact analysis:
+
+1. DISCIPLINARY SPREAD:
+   - Which scientific fields adopted this method?
+   - What adaptations were made for different domains?
+   - Identify any cross-pollination patterns
+
+2. APPLICATION EVOLUTION:
+   - What novel applications emerged from the original method?
+   - How did the method's use cases expand over time?
+   - Any unexpected or creative applications?
+
+3. IMPACT CLASSIFICATION:
+   - Incremental: Minor improvements to existing approaches
+   - Significant: Meaningful advances enabling new capabilities
+   - Transformational: Paradigm-shifting impact across fields
+   - Revolutionary: Fundamental change in how science is conducted
+
+4. EVIDENCE SYNTHESIS:
+   - Key indicators supporting impact assessment
+   - Notable limitations or gaps in adoption
+   - Future trajectory predictions
+
+=== OUTPUT FORMAT ===
+Return JSON:
+{{
+    "disciplinary_spread": {{
+        "primary_fields": ["<field1>", "<field2>"],
+        "secondary_fields": ["<field3>"],
+        "adaptation_patterns": "<description>"
+    }},
+    "applications": {{
+        "original": "<original application>",
+        "emerged": ["<new app 1>", "<new app 2>"],
+        "unexpected": ["<surprising application>"]
+    }},
+    "impact_classification": "<incremental|significant|transformational|revolutionary>",
+    "impact_evidence": ["<evidence point 1>", "<evidence point 2>"],
+    "limitations": ["<limitation 1>"],
+    "future_trajectory": "<prediction based on trends>"
+}}"""
 
         try:
             response = self.client.chat.completions.create(

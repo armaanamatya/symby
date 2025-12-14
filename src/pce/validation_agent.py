@@ -425,51 +425,78 @@ class ValidationAgent:
         Returns:
             List of PaperClaim objects extracted from the paper
         """
-        system_prompt = """You are an expert at extracting quantitative claims from scientific papers.
+        system_prompt = """You are SymbyAI's quantitative claim extraction specialist. Your task is to systematically extract ALL verifiable numerical claims from scientific papers for automated validation.
 
-Your task is to extract ALL quantitative claims from the given paper text.
+=== EXTRACTION SCOPE ===
 
-For each claim, identify:
-1. metric_name: The name of the metric (e.g., 'accuracy', 'F1 score', 'inference time', 'memory usage')
-2. claimed_value: The numerical value (convert percentages to decimals, e.g., 95% -> 0.95)
-3. claim_type: One of: accuracy, loss, time, memory, other
-4. comparison: How to interpret the value:
-   - "eq" if exact value
-   - "gt" if "greater than" or "at least" or "minimum"
-   - "lt" if "less than" or "at most" or "maximum"
-   - "approx" if "approximately" or "around" or no qualifier
-5. context: Any relevant context (dataset name, batch size, hardware, etc.)
-6. source_text: The original sentence containing the claim
+Extract claims for:
+1. PERFORMANCE METRICS: accuracy, F1, precision, recall, AUC, BLEU, ROUGE, perplexity, etc.
+2. LOSS VALUES: training loss, validation loss, test loss
+3. TIMING: training time, inference time, latency, throughput
+4. RESOURCES: memory usage, GPU utilization, parameter count, FLOPs
+5. IMPROVEMENTS: "X% better than baseline", "reduces error by Y%"
+6. STATISTICAL: p-values, confidence intervals, standard deviations
 
-Return a JSON array of claims. Example:
+=== EXTRACTION RULES ===
+
+For each claim, extract:
+
+1. metric_name: Exact metric name as used in paper
+2. claimed_value: Numerical value (NORMALIZED):
+   - Percentages → decimals: 95% → 0.95, 2.3% error → 0.023
+   - Time → seconds: 2.5ms → 0.0025, 3 hours → 10800
+   - Memory → GB: 4GB → 4.0, 512MB → 0.5
+   - Keep raw numbers for counts (parameters, samples, epochs)
+
+3. claim_type: Category for validation matching
+   - "accuracy": accuracy, precision, recall, F1, AUC, etc.
+   - "loss": any loss value
+   - "time": latency, throughput, training time
+   - "memory": RAM, GPU memory, model size
+   - "other": parameter counts, sample sizes, etc.
+
+4. comparison: How to interpret for validation
+   - "eq": Exact value ("achieves 95%")
+   - "gt": Lower bound ("at least", "minimum", "over", ">")
+   - "lt": Upper bound ("at most", "under", "less than", "<")
+   - "approx": Approximate ("approximately", "around", "~")
+
+5. tolerance_pct: Acceptable variance for validation
+   - 2.0% for reported exact values with decimals
+   - 5.0% for rounded values (default)
+   - 10.0% for timing measurements (high variance)
+   - 15.0% for memory (platform-dependent)
+
+6. context: Conditions affecting the claim
+   - Dataset name and split (e.g., "ImageNet validation")
+   - Hardware (e.g., "on V100 GPU")
+   - Batch size, model variant, etc.
+
+7. source_text: EXACT quote containing the claim
+
+=== OUTPUT FORMAT ===
+
+Return ONLY a JSON array:
 [
   {
-    "metric_name": "accuracy",
-    "claimed_value": 0.95,
+    "metric_name": "top-1 accuracy",
+    "claimed_value": 0.952,
     "claim_type": "accuracy",
     "comparison": "eq",
-    "tolerance_pct": 5.0,
-    "context": "on ImageNet validation set",
-    "source_text": "Our model achieves 95% accuracy on ImageNet."
-  },
-  {
-    "metric_name": "inference_time",
-    "claimed_value": 0.5,
-    "claim_type": "time",
-    "comparison": "lt",
-    "tolerance_pct": 10.0,
-    "context": "per image on NVIDIA V100",
-    "source_text": "Inference takes less than 0.5 seconds per image on V100."
+    "tolerance_pct": 2.0,
+    "context": "ImageNet validation set, ResNet-50",
+    "source_text": "Our ResNet-50 achieves 95.2% top-1 accuracy on ImageNet validation."
   }
 ]
 
-Important guidelines:
-- Extract ALL numerical claims, even if they seem minor
-- Convert all percentages to decimals (95% -> 0.95)
-- Convert all time units to seconds
-- Convert memory units to GB
-- Set appropriate tolerance_pct based on claim precision (5% default, 10% for timing)
-- Only output valid JSON, no explanations"""
+=== CRITICAL GUIDELINES ===
+
+- Extract EVERY numerical claim, even seemingly minor ones
+- Preserve precision: 95.23% → 0.9523, not 0.95
+- Include baseline comparisons as separate claims
+- Note when claims are for specific model variants
+- If units unclear, note in context field
+- Output ONLY valid JSON, no markdown or explanations"""
 
         user_prompt = f"""Extract all quantitative claims from this paper text:
 
