@@ -11,6 +11,14 @@ import plotly.graph_objects as go
 from pathlib import Path
 from collections import defaultdict
 import sys
+import io
+
+# PDF extraction
+try:
+    import fitz  # PyMuPDF
+    PDF_SUPPORT = True
+except ImportError:
+    PDF_SUPPORT = False
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / 'src' / 'data'))
@@ -65,6 +73,29 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+
+def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    """Extract text from PDF bytes using PyMuPDF"""
+    if not PDF_SUPPORT:
+        raise ImportError("PyMuPDF (fitz) is required for PDF extraction. Install with: pip install PyMuPDF")
+
+    text_parts = []
+    try:
+        # Open PDF from bytes
+        pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
+
+        for page_num in range(len(pdf_document)):
+            page = pdf_document[page_num]
+            text = page.get_text()
+            if text.strip():
+                text_parts.append(text)
+
+        pdf_document.close()
+
+        return "\n\n".join(text_parts)
+    except Exception as e:
+        raise ValueError(f"Failed to extract text from PDF: {str(e)}")
 
 
 @st.cache_data
@@ -372,15 +403,45 @@ def render_paper_upload():
             field = st.text_input("Field/Domain (optional)", value="Unknown")
 
     else:  # Upload File
+        # Determine supported file types
+        supported_types = ['txt']
+        type_help = "Upload a plain text file"
+
+        if PDF_SUPPORT:
+            supported_types.append('pdf')
+            type_help = "Upload a plain text (.txt) or PDF (.pdf) file"
+        else:
+            st.warning("PDF support not available. Install PyMuPDF for PDF uploads: `pip install PyMuPDF`")
+
         uploaded_file = st.file_uploader(
-            "Upload your paper (TXT file)",
-            type=['txt'],
-            help="Upload a plain text file containing your research paper"
+            "Upload your paper",
+            type=supported_types,
+            help=type_help + " containing your research paper"
         )
 
         if uploaded_file:
-            paper_text = uploaded_file.read().decode('utf-8')
-            paper_id = uploaded_file.name.replace('.txt', '')
+            file_extension = uploaded_file.name.lower().split('.')[-1]
+
+            if file_extension == 'pdf':
+                # Extract text from PDF
+                try:
+                    with st.spinner("Extracting text from PDF..."):
+                        pdf_bytes = uploaded_file.read()
+                        paper_text = extract_text_from_pdf(pdf_bytes)
+
+                    if not paper_text.strip():
+                        st.error("Could not extract text from PDF. The PDF may be image-based or corrupted.")
+                        paper_text = None
+                    else:
+                        st.success(f"Successfully extracted {len(paper_text):,} characters from PDF")
+                except Exception as e:
+                    st.error(f"Error reading PDF: {str(e)}")
+                    paper_text = None
+            else:
+                # Handle text file
+                paper_text = uploaded_file.read().decode('utf-8')
+
+            paper_id = uploaded_file.name.rsplit('.', 1)[0]  # Remove any extension
             field = st.text_input("Field/Domain (optional)", value="Unknown")
 
     # Analyze button
