@@ -533,11 +533,17 @@ def render_paper_upload():
             st.session_state['paper_text'] = paper_text
             st.session_state['paper_id'] = paper_id
 
-            # ==========================================================================
-            # SANDBOX EXECUTION SECTION
-            # ==========================================================================
-            st.markdown("---")
-            render_sandbox_section(paper_text, evaluation, paper_id)
+    # ==========================================================================
+    # SANDBOX EXECUTION SECTION (persisted via session state)
+    # ==========================================================================
+    # Render sandbox section if we have analyzed a paper
+    if 'paper_evaluation' in st.session_state and 'paper_text' in st.session_state:
+        st.markdown("---")
+        render_sandbox_section(
+            st.session_state['paper_text'],
+            st.session_state['paper_evaluation'],
+            st.session_state['paper_id']
+        )
 
 
 def extract_code_blocks_from_text(text: str) -> list:
@@ -858,16 +864,26 @@ def render_sandbox_section(paper_text: str, evaluation: dict, paper_id: str):
             else:
                 st.info("🔧 No specific ML frameworks detected")
 
+    # Debug info
+    with st.expander("🐛 Debug Info", expanded=False):
+        st.write(f"Code blocks in session state: {len(st.session_state.sandbox_code_blocks)}")
+        st.write(f"Paper text length: {len(paper_text)} chars")
+        if st.session_state.sandbox_code_blocks:
+            st.write("First block preview:")
+            st.json(st.session_state.sandbox_code_blocks[0])
+
     # Display extracted code blocks
     if st.session_state.sandbox_code_blocks:
         st.markdown("### 📦 Extracted Code Blocks")
 
         for i, block in enumerate(st.session_state.sandbox_code_blocks):
-            with st.expander(f"Code Block {i + 1} ({block.get('language', 'unknown')})", expanded=(i == 0)):
+            source = block.get('source', 'unknown')
+            with st.expander(f"Code Block {i + 1} - {source} ({block.get('language', 'unknown')})", expanded=(i == 0)):
                 st.code(block.get('code', ''), language=block.get('language', 'python'))
 
                 if st.button(f"▶️ Run Block {i + 1}", key=f"run_block_{i}"):
                     st.session_state.sandbox_selected_code = block.get('code', '')
+                    st.rerun()
 
     # Custom code editor
     st.markdown("### ✏️ Code Editor")
