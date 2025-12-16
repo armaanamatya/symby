@@ -806,14 +806,14 @@ class UnifiedMetricsEngine:
             },
             'nonml_papers': {
                 'count': len(nonml_papers),
-                'code_rate': round(nonml_papers['has_code'].mean(), 4),
-                'data_rate': round(nonml_papers['has_data'].mean(), 4) if 'has_data' in nonml_papers.columns else 0,
-                'avg_repro_score': round(nonml_papers['repro_score'].mean(), 2),
-                'avg_text_length': int(nonml_papers['text_length'].mean()),
+                'code_rate': round(nonml_papers['has_code'].mean(), 4) if len(nonml_papers) > 0 else 0,
+                'data_rate': round(nonml_papers['has_data'].mean(), 4) if len(nonml_papers) > 0 and 'has_data' in nonml_papers.columns else 0,
+                'avg_repro_score': round(nonml_papers['repro_score'].mean(), 2) if len(nonml_papers) > 0 else 0,
+                'avg_text_length': int(nonml_papers['text_length'].mean()) if len(nonml_papers) > 0 else 0,
             },
             'delta': {
-                'code_rate': round(ml_papers['has_code'].mean() - nonml_papers['has_code'].mean(), 4),
-                'repro_score': round(ml_papers['repro_score'].mean() - nonml_papers['repro_score'].mean(), 2),
+                'code_rate': round(ml_papers['has_code'].mean() - (nonml_papers['has_code'].mean() if len(nonml_papers) > 0 else 0), 4),
+                'repro_score': round(ml_papers['repro_score'].mean() - (nonml_papers['repro_score'].mean() if len(nonml_papers) > 0 else 0), 2),
             }
         }
 

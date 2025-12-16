@@ -16,3 +16,56 @@ venv/
 *.json.gz
 *.jsonl.zip
 *.zip
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs and temp files
+*.log
+streamlit.log
+nohup.out
+
+# Cache directories
+cache/
+checkpoints/
+.cache/
+
+# Embeddings and model artifacts (large files)
+embeddings_store/
+*.npy
+*.pkl
+!scripts/*.pkl
+
+# FAISS indexes
+*.faiss
+test_index_temp/
+
+# Real S2ORC data (keep sample data)
+# s2orc_data/  # Commented out to allow sample data
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+# Environment files
+.env
+.env.local
