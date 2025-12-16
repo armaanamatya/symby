@@ -1,3 +1,21 @@
+s2orc_data/
+.env
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+
+# Large data files
+*.json
+*.jsonl
+*.json.gz
+*.jsonl.zip
+*.zip
 # Python
 __pycache__/
 *.py[cod]
